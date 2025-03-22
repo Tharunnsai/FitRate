@@ -5,18 +5,22 @@ import { useRouter, usePathname } from "next/navigation"
 import { supabase } from "./supabase"
 import type { User } from "@supabase/supabase-js"
 
-type AuthContextType = {
-  user: User | null
+export type AuthContextType = {
+  user: User | null | undefined
+  signUp: (email: string, password: string) => Promise<{ error: any }>
   signIn: (email: string, password: string) => Promise<{ success: boolean, error?: any }>
-  signUp: (email: string, password: string) => Promise<{ success: boolean, error?: any }>
   signOut: () => Promise<void>
-  loading: boolean
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({
+  user: undefined,
+  signUp: async () => ({ error: null }),
+  signIn: async () => ({ success: true }),
+  signOut: async () => {},
+})
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<User | null | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
@@ -67,9 +71,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, pathname, router])
 
+  const signUp = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+    })
+    return { error }
+  }
+  
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -83,39 +95,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
   
-  const signUp = async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      })
-      
-      if (error) throw error
-      
-      // After signup, redirect to profile to complete setup
-      router.push('/profile')
-      return { success: true }
-    } catch (error) {
-      return { success: false, error }
-    }
-  }
-  
   const signOut = async () => {
     await supabase.auth.signOut()
     router.push('/')
   }
   
   return (
-    <AuthContext.Provider value={{ user, signIn, signUp, signOut, loading }}>
+    <AuthContext.Provider value={{ user, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
-} 
+export const useAuth = () => useContext(AuthContext) 

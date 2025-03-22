@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import Image from "next/image"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Star, MessageSquare, Heart } from "lucide-react"
+import { Star, MessageSquare, Heart, Loader2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Progress } from "@/components/ui/progress"
 import { supabase } from '@/lib/supabase'
@@ -99,7 +99,17 @@ async function getImages() {
   });
 }
 
-export default function GalleryPage() {
+// Update the supabaseLoader function with proper TypeScript types
+const supabaseLoader = ({ src, width, quality }: { src: string; width: number; quality?: number }) => {
+  // Only add query params for Supabase URLs
+  if (src.includes('tysdqyzxglrdmbgofqaq.supabase.co')) {
+    return `${src}?w=${width}&q=${quality || 75}`
+  }
+  return src
+}
+
+// Separate the gallery content into its own component
+function GalleryContent() {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [hasMore, setHasMore] = useState(true)
   const [page, setPage] = useState(1)
@@ -273,13 +283,13 @@ export default function GalleryPage() {
             </div>
 
             {/* Image */}
-            <div className="relative aspect-square w-full">
-              <Image
-                src={photo.image_url || "/placeholder.svg"}
-                alt={photo.title}
-                fill
+            <div className="relative aspect-square overflow-hidden">
+              <Image 
+                src={photo.image_url}
+                alt={photo.title || "Photo"} 
+                fill 
                 className="object-cover"
-                priority={photos.indexOf(photo) < 4} // Prioritize first 4 images (visible on initial load)
+                unoptimized={true}
               />
             </div>
 
@@ -378,6 +388,42 @@ export default function GalleryPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Main gallery page with Suspense boundary
+export default function GalleryPage() {
+  return (
+    <Suspense fallback={
+      <div className="container max-w-xl py-6">
+        <div className="flex flex-col space-y-6">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="overflow-hidden border-none shadow-lg">
+              <div className="p-4">
+                <div className="flex items-center space-x-4">
+                  <Skeleton className="h-12 w-12 rounded-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-[200px]" />
+                    <Skeleton className="h-4 w-[160px]" />
+                  </div>
+                </div>
+              </div>
+              <Skeleton className="h-[300px] w-full" />
+              <div className="p-4 space-y-4">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <div className="flex justify-between">
+                  <Skeleton className="h-10 w-[100px]" />
+                  <Skeleton className="h-10 w-[100px]" />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    }>
+      <GalleryContent />
+    </Suspense>
   )
 }
 

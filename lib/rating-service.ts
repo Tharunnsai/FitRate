@@ -103,21 +103,38 @@ export async function getUserRating(
   }
 }
 
-// Get all user ratings
-export async function getUserRatings(userId: string): Promise<Record<string, number>> {
+// Get a user's ratings for multiple photos
+export async function getUserRatings(
+  userId: string
+): Promise<Record<string, number>> {
   try {
+    // If there are no photos, return an empty object
+    const { data: photos } = await supabase
+      .from('photos')
+      .select('id')
+      .limit(100)
+    
+    if (!photos || photos.length === 0) {
+      return {}
+    }
+    
+    const photoIds = photos.map(photo => photo.id)
+    
     const { data, error } = await supabase
       .from('ratings')
       .select('photo_id, rating')
       .eq('user_id', userId)
+      .in('photo_id', photoIds)
     
     if (error) throw error
     
-    // Convert to a map of photo_id -> rating
-    return (data || []).reduce((map, item) => {
+    // Convert array of ratings to a map of photo_id -> rating
+    const ratingsMap = (data || []).reduce((map, item) => {
       map[item.photo_id] = item.rating
       return map
-    }, {})
+    }, {} as Record<string, number>)
+    
+    return ratingsMap
   } catch (error) {
     console.error('Error getting user ratings:', error)
     return {}

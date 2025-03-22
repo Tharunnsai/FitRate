@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
@@ -10,23 +10,24 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
-export default function LoginPage() {
+// Create a separate component for the search params logic
+function LoginForm() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { signIn, user } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-
-  // Check for success message from signup page
+  
+  // Check for message from URL params
   useEffect(() => {
-    const message = searchParams.get("message")
-    if (message) {
-      setMessage(message)
+    const params = new URLSearchParams(window.location.search)
+    const messageParam = params.get("message")
+    if (messageParam) {
+      setMessage(messageParam)
     }
-  }, [searchParams])
+  }, [])
 
   // Redirect if already logged in
   useEffect(() => {
@@ -40,49 +41,38 @@ export default function LoginPage() {
     
     // Reset error state
     setError(null)
+    setLoading(true)
     
-    try {
-      setLoading(true)
-      const { error } = await signIn(email, password)
-      
-      if (error) {
-        setError(error.message)
-        return
-      }
-      
-      // Successful login will trigger the useEffect above to redirect
-      
-    } catch (err) {
-      console.error("Login error:", err)
-      setError("An unexpected error occurred")
-    } finally {
-      setLoading(false)
+    const { success, error } = await signIn(email, password)
+    
+    if (!success) {
+      setError(error?.message || "Failed to sign in")
     }
+    
+    setLoading(false)
   }
 
   return (
-    <div className="container flex items-center justify-center min-h-screen py-12">
+    <div className="container flex items-center justify-center min-h-screen">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Sign in</CardTitle>
-          <CardDescription>
-            Enter your email and password to access your account
-          </CardDescription>
+          <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
+          <CardDescription>Enter your email and password to sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          {message && (
+            <Alert className="mb-4">
+              <AlertDescription>{message}</AlertDescription>
+            </Alert>
+          )}
+          
           <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            
-            {message && (
-              <Alert>
-                <AlertDescription>{message}</AlertDescription>
-              </Alert>
-            )}
-            
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input 
@@ -122,4 +112,29 @@ export default function LoginPage() {
       </Card>
     </div>
   )
-} 
+}
+
+// Main page component with Suspense boundary
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="container flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
+            <CardDescription>Loading...</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="h-10 bg-gray-100 rounded animate-pulse"></div>
+              <div className="h-10 bg-gray-100 rounded animate-pulse"></div>
+              <div className="h-10 bg-gray-100 rounded animate-pulse"></div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
+  )
+}

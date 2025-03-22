@@ -5,19 +5,30 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/login")
+    // If no user is logged in, redirect to login page
+    if (user === null) {
+      router.push('/login')
     }
-  }, [user, isLoading, router])
+  }, [user, router])
 
-  // Show loading or nothing while checking authentication
-  if (isLoading || !user) {
-    return <div className="container flex items-center justify-center min-h-screen">Loading...</div>
+  // Show nothing while checking authentication
+  if (user === undefined) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    )
   }
 
+  // If user is null, we're redirecting, so don't show anything
+  if (user === null) {
+    return null
+  }
+
+  // User is authenticated, show the protected content
   return <>{children}</>
 } 

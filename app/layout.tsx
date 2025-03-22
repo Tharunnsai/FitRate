@@ -10,8 +10,8 @@ import DefaultLayout from "./default-layout"
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Fitness Photo Rating',
-  description: 'Share and rate fitness progress photos',
+  title: 'FitRate - Fitness Progress Tracker',
+  description: 'Track and share your fitness journey with the community',
   generator: 'v0.dev',
 }
 
