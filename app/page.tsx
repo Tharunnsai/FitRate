@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Star, Upload, Users } from "lucide-react"
+import Image from "next/image"
 
 export default function HomePage() {
   const { user } = useAuth()
@@ -44,7 +45,7 @@ export default function HomePage() {
                 </Button>
               </div>
             </div>
-            <img
+            <Image
               src="/hero-image.jpg"
               alt="Fitness progress"
               className="mx-auto aspect-video overflow-hidden rounded-xl object-cover object-center sm:w-full lg:order-last"

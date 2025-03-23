@@ -46,7 +46,7 @@ function LoginForm() {
     const { success, error } = await signIn(email, password)
     
     if (!success) {
-      setError(error?.message || "Failed to sign in")
+      setError(error || "Failed to sign in")
     }
     
     setLoading(false)
@@ -103,7 +103,7 @@ function LoginForm() {
         </CardContent>
         <CardFooter className="flex justify-center">
           <p className="text-sm text-gray-500">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/signup" className="text-primary font-medium hover:underline">
               Sign up
             </Link>

@@ -8,8 +8,8 @@ import type { User } from "@supabase/supabase-js"
 export type AuthContextType = {
   user: User | null | undefined
   loading: boolean
-  signUp: (email: string, password: string) => Promise<{ error: any }>
-  signIn: (email: string, password: string) => Promise<{ success: boolean, error?: any }>
+  signUp: (email: string, password: string) => Promise<{ error: Error | null }>
+  signIn: (email: string, password: string) => Promise<{ success: boolean, error?: string }>
   signOut: () => Promise<void>
 }
 
@@ -93,7 +93,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push('/gallery')
       return { success: true }
     } catch (error) {
-      return { success: false, error }
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      return { success: false, error: errorMessage }
     }
   }
   

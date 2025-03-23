@@ -5,7 +5,6 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,9 +14,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Upload, ImageIcon } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { uploadPhoto } from "@/lib/photo-service"
+import Image from "next/image"
 
 export default function UploadPage() {
-  const router = useRouter()
   const { user } = useAuth()
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -50,7 +49,7 @@ export default function UploadPage() {
       setUploading(true)
       
       // Use the new uploadPhoto function
-      const { success, photo, error } = await uploadPhoto(
+      const { success, error } = await uploadPhoto(
         user.id, 
         file, 
         title, 
@@ -58,7 +57,7 @@ export default function UploadPage() {
       )
       
       if (!success) {
-        throw new Error(error.message || "Failed to upload photo")
+        throw new Error(error?.message || "Failed to upload photo")
       }
       
       setIsSuccess(true)
@@ -124,7 +123,13 @@ export default function UploadPage() {
 
                 {preview ? (
                   <div className="relative w-full max-h-[300px] overflow-hidden rounded-md">
-                    <img src={preview || "/placeholder.svg"} alt="Preview" className="w-full h-auto object-contain" />
+                    <Image 
+                      src={preview || "/placeholder.svg"} 
+                      alt="Preview" 
+                      width={600}
+                      height={400}
+                      className="w-full h-auto object-contain" 
+                    />
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center text-center p-6">
