@@ -48,7 +48,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   return data
 }
 
-export async function updateProfile(profile: Partial<Profile> & { id: string }): Promise<{ success: boolean, error?: any }> {
+export async function updateProfile(profile: Partial<Profile>): Promise<{ success: boolean, error?: Error }> {
   // Add updated_at timestamp
   const updates = {
     ...profile,
@@ -68,7 +68,7 @@ export async function updateProfile(profile: Partial<Profile> & { id: string }):
   return { success: true }
 }
 
-export async function uploadAvatar(userId: string, file: File): Promise<{ success: boolean, url?: string, error?: any }> {
+export async function uploadAvatar(userId: string, file: File): Promise<{ success: boolean, url?: string, error?: Error }> {
   // Create a unique file name
   const fileExt = file.name.split('.').pop()
   const fileName = `${userId}_${Math.random().toString(36).substring(2, 15)}.${fileExt}`

@@ -31,7 +31,7 @@ export async function ratePhoto(
   userId: string,
   photoId: string,
   rating: number
-): Promise<{ success: boolean, error?: any }> {
+): Promise<{ success: boolean, error?: Error }> {
   try {
     // Check if user has already rated this photo
     const { data: existingRating, error: checkError } = await supabase

@@ -1,52 +1,13 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { getAllPhotos, type Photo } from "@/lib/photo-service"
+import Image from "next/image"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import Image from "next/image"
 import Link from "next/link"
 import { Star } from "lucide-react"
-
-// Remove unused function
-// const generateMockPhotos = (count: number): Photo[] => {
-//   return Array.from({ length: count }).map((_, i) => ({
-//     id: `photo-${i}`,
-//     user_id: `user-${Math.floor(Math.random() * 10)}`,
-//     title: `Fitness Progress ${i}`,
-//     description: `This is my progress after ${Math.floor(Math.random() * 12)} months of training.`,
-//     image_url: `/placeholder.svg?height=400&width=300&text=Photo+${i}`,
-//     rating: Math.floor(Math.random() * 5) + 5,
-//     votes_count: Math.floor(Math.random() * 100),
-//     likes_count: Math.floor(Math.random() * 50),
-//     created_at: new Date(Date.now() - Math.random() * 10000000000).toISOString(),
-//     updated_at: new Date().toISOString(),
-//     user: {
-//       name: `User ${Math.floor(Math.random() * 10)}`,
-//       avatar: `/placeholder.svg?height=40&width=40&text=U${Math.floor(Math.random() * 10)}`
-//     }
-//   }))
-// }
-
-// Remove unused function
-// function getImages() {
-//   return [
-//     {
-//       id: 1,
-//       title: "3 Months Progress",
-//       imageUrl: "/placeholder.svg?height=400&width=300",
-//       rating: 8.4,
-//       votes: 24,
-//       date: "2023-12-15",
-//       user: {
-//         name: "John Doe",
-//         avatar: "/placeholder.svg?height=40&width=40&text=JD"
-//       }
-//     },
-//     // ... other images
-//   ]
-// }
+import { getAllPhotos, type Photo } from "@/lib/photo-service"
 
 export default function GalleryPage() {
   const [photos, setPhotos] = useState<Photo[]>([])
@@ -54,7 +15,7 @@ export default function GalleryPage() {
   const [hasMore, setHasMore] = useState(true)
   const [page, setPage] = useState(1)
   const loaderRef = useRef<HTMLDivElement>(null)
-  const [sortBy, _setSortBy] = useState<'recent' | 'top-rated' | 'most-liked'>('recent')
+  const [sortBy, setSortBy] = useState<'recent' | 'top-rated' | 'most-liked'>('recent')
   
   // Function to load photos
   const loadPhotos = useCallback(async (pageNum: number, reset: boolean = false) => {
@@ -113,13 +74,22 @@ export default function GalleryPage() {
       }
     }
   }, [loadMorePhotos])
+
+  // Handle sort change
+  const handleSortChange = (value: 'recent' | 'top-rated' | 'most-liked') => {
+    setSortBy(value);
+    setPage(1);
+    loadPhotos(1, true);
+  };
   
   return (
     <div className="container py-8">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8">
         <h1 className="text-3xl font-bold mb-4 md:mb-0">Fitness Gallery</h1>
         
-        <Tabs defaultValue="recent" className="w-full md:w-auto">
+        <Tabs defaultValue="recent" className="w-full md:w-auto" onValueChange={(value) => 
+          handleSortChange(value as 'recent' | 'top-rated' | 'most-liked')
+        }>
           <TabsList>
             <TabsTrigger value="recent">Recent</TabsTrigger>
             <TabsTrigger value="top-rated">Top Rated</TabsTrigger>

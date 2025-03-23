@@ -22,7 +22,7 @@ export async function uploadPhoto(
   file: File, 
   title: string, 
   description: string
-): Promise<{ success: boolean, photo?: Photo, error?: any }> {
+): Promise<{ success: boolean, photo?: Photo, error?: Error }> {
   try {
     // 1. Upload the image to Supabase Storage
     const fileExt = file.name.split('.').pop()
@@ -114,86 +114,75 @@ export async function getAllPhotos(
   limit: number = 12
 ): Promise<{ photos: Photo[], hasMore: boolean }> {
   try {
-    // First, get the total count to avoid range errors
-    const { count, error: countError } = await supabase
-      .from('photos')
-      .select('*', { count: 'exact', head: true })
-    
-    if (countError) {
-      console.error('Error counting photos:', countError)
-      return { photos: [], hasMore: false }
-    }
-    
-    // If there are no photos or requesting beyond available photos, return empty
-    if (!count || (page - 1) * limit >= count) {
-      return { photos: [], hasMore: false }
-    }
-    
-    // Now fetch the actual photos
+    // First, get the photos without the join
     let query = supabase
       .from('photos')
       .select('*')
     
     // Apply sorting
-    switch (sortBy) {
-      case 'top-rated':
-        query = query.order('rating', { ascending: false })
-        break
-      case 'most-liked':
-        query = query.order('likes_count', { ascending: false })
-        break
-      case 'recent':
-      default:
-        query = query.order('created_at', { ascending: false })
-        break
+    if (sortBy === 'recent') {
+      query = query.order('created_at', { ascending: false })
+    } else if (sortBy === 'top-rated') {
+      query = query.order('rating', { ascending: false })
+    } else if (sortBy === 'most-liked') {
+      query = query.order('likes_count', { ascending: false })
     }
     
     // Apply pagination
     const from = (page - 1) * limit
-    const to = Math.min(from + limit - 1, count - 1) // Ensure we don't go beyond available rows
+    const to = from + limit - 1
     
-    const { data, error } = await query
-      .range(from, to)
+    query = query.range(from, to)
+    
+    const { data, error, count } = await query
     
     if (error) {
-      console.error('Error fetching photos:', error)
-      return { photos: [], hasMore: false }
+      throw error
     }
     
-    // Get user profiles for each photo
+    // Get user profiles separately
     const userIds = Array.from(new Set(data.map(photo => photo.user_id)))
     
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, username, full_name, avatar_url')
-      .in('id', userIds)
+    let profiles = []
+    if (userIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url')
+        .in('id', userIds)
+      
+      profiles = profilesData || []
+    }
     
-    // Create a map of user profiles by ID for quick lookup
-    const profileMap: Record<string, any> = (profiles || []).reduce((map: Record<string, any>, profile) => {
+    // Create a map for quick lookup
+    const profileMap = profiles.reduce((map, profile) => {
       map[profile.id] = profile
       return map
     }, {})
     
-    // Add user info to each photo
-    const photosWithUserInfo = data.map(photo => {
-      const profile = profileMap[photo.user_id]
-      return {
-        ...photo,
-        user: {
-          name: profile ? (profile.full_name || profile.username) : 'User',
-          avatar: profile?.avatar_url || '/placeholder-user.jpg'
-        }
+    // Transform the data to match our Photo type
+    const photos: Photo[] = data.map(item => ({
+      id: item.id,
+      user_id: item.user_id,
+      title: item.title,
+      description: item.description,
+      image_url: item.image_url,
+      rating: item.rating || 0,
+      votes_count: item.votes_count || 0,
+      likes_count: item.likes_count || 0,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      user: {
+        name: profileMap[item.user_id]?.username || 'Anonymous',
+        avatar: profileMap[item.user_id]?.avatar_url || '/placeholder-user.jpg'
       }
-    })
+    }))
     
-    const hasMore = count ? from + limit < count : false
+    // Check if there are more photos
+    const hasMore = count ? from + photos.length < count : false
     
-    return { 
-      photos: photosWithUserInfo || [], 
-      hasMore 
-    }
+    return { photos, hasMore }
   } catch (error) {
-    console.error('Error in getAllPhotos:', error)
+    console.error('Error fetching photos:', error)
     return { photos: [], hasMore: false }
   }
 }

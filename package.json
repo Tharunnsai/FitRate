@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build --no-lint",
+    "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "deploy-build": "tsc --noEmit --skipLibCheck && next build"
+    "lint": "next lint --fix",
+    "deploy-build": "npm run lint && tsc --noEmit --skipLibCheck && next build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
