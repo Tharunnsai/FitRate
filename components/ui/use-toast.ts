@@ -4,21 +4,30 @@
 import * as React from "react"
 
 import type {
-  // Rename unused types with underscore prefix
-  _ToastActionElement,
-  _ToastProps,
+  ToastActionElement,
+  ToastProps,
 } from "@/components/ui/toast"
-import { Toast } from "@/components/ui/toast"
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
-
-type ToasterToast = Toast & {
-  id: string
+// Define a base toast interface to avoid circular references
+interface BaseToast {
+  id?: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
+
+// Now define ToasterToast using the base interface
+type ToasterToast = BaseToast & {
+  id: string
+}
+
+// And define Toast using the base interface
+type Toast = BaseToast
+
+const TOAST_LIMIT = 1
+const TOAST_REMOVE_DELAY = 1000000
 
 const _actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -141,8 +150,6 @@ function dispatch(action: Action) {
     listener(memoryState)
   })
 }
-
-type Toast = Omit<ToasterToast, "id">
 
 function toast({ ...props }: Toast) {
   const id = genId()

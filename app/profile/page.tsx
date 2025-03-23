@@ -3,15 +3,15 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter as _CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import Image from "next/image"
-import { Star, LogOut, Upload, User, ImageIcon, Loader2 } from "lucide-react"
-import { supabase } from '@/lib/supabase'
+import { Star, LogOut, Upload, User as _User, ImageIcon, Loader2 } from "lucide-react"
+import { supabase as _supabase } from '@/lib/supabase'
 import { useAuth } from "@/lib/auth-context"
 import { getProfile, updateProfile, uploadAvatar, type Profile } from "@/lib/profile-service"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -49,7 +49,7 @@ type UserStats = {
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth()
-  const [uploads, setUploads] = useState(mockUploads)
+  const [_uploads, _setUploads] = useState(mockUploads)
   
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -126,10 +126,10 @@ export default function ProfilePage() {
       
       // Upload avatar if a new one was selected
       if (avatarFile) {
-        const { success, url, error } = await uploadAvatar(user.id, avatarFile)
+        const { success, error } = await uploadAvatar(user.id, avatarFile)
         
         if (!success) {
-          throw new Error(error.message || "Failed to upload avatar")
+          throw new Error(error?.message || "Failed to upload avatar")
         }
       }
       
@@ -142,7 +142,7 @@ export default function ProfilePage() {
       })
       
       if (!success) {
-        throw new Error(error.message || "Failed to update profile")
+        throw new Error(error?.message || "Failed to update profile")
       }
       
       // Refresh profile data
@@ -154,8 +154,8 @@ export default function ProfilePage() {
       setSuccess("Profile updated successfully!")
       setAvatarFile(null)
       
-    } catch (err: any) {
-      setError(err.message || "An error occurred while updating your profile")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An error occurred while updating your profile")
       console.error("Profile update error:", err)
     } finally {
       setUpdating(false)

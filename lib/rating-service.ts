@@ -71,7 +71,10 @@ export async function ratePhoto(
     return { success: true }
   } catch (error) {
     console.error('Error rating photo:', error)
-    return { success: false, error }
+    return { 
+      success: false, 
+      error: error instanceof Error ? error : new Error(String(error)) 
+    }
   }
 }
 

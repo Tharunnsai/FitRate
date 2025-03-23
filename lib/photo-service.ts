@@ -68,7 +68,10 @@ export async function uploadPhoto(
     
   } catch (error) {
     console.error('Error uploading photo:', error)
-    return { success: false, error }
+    return { 
+      success: false, 
+      error: error instanceof Error ? error : new Error(String(error)) 
+    }
   }
 }
 
@@ -143,7 +146,7 @@ export async function getAllPhotos(
     // Get user profiles separately
     const userIds = Array.from(new Set(data.map(photo => photo.user_id)))
     
-    let profiles = []
+    let profiles: Array<{id: string, username?: string, avatar_url?: string}> = []
     if (userIds.length > 0) {
       const { data: profilesData } = await supabase
         .from('profiles')
@@ -154,10 +157,10 @@ export async function getAllPhotos(
     }
     
     // Create a map for quick lookup
-    const profileMap = profiles.reduce((map, profile) => {
-      map[profile.id] = profile
-      return map
-    }, {})
+    const profileMap: Record<string, {id: string, username?: string, avatar_url?: string}> = {}
+    profiles.forEach(profile => {
+      profileMap[profile.id] = profile
+    })
     
     // Transform the data to match our Photo type
     const photos: Photo[] = data.map(item => ({
