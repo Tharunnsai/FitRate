@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --no-lint",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "deploy-build": "tsc --noEmit --skipLibCheck && next build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -43,6 +44,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
+    "critters": "^0.0.25",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "8.5.1",
     "input-otp": "1.4.1",

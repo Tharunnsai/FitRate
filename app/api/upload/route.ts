@@ -1,14 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
+// Initialize Supabase client with proper error handling
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Check if environment variables are defined
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing Supabase environment variables');
+}
+
 // Initialize Supabase client
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // Use service role key for server operations
+  supabaseUrl || '',
+  supabaseServiceKey || ''
 );
 
 export async function POST(request: Request) {
   try {
+    // Verify environment variables are available
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const userId = formData.get('userId') as string;

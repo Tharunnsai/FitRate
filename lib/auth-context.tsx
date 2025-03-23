@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js"
 
 export type AuthContextType = {
   user: User | null | undefined
+  loading: boolean
   signUp: (email: string, password: string) => Promise<{ error: any }>
   signIn: (email: string, password: string) => Promise<{ success: boolean, error?: any }>
   signOut: () => Promise<void>
@@ -14,6 +15,7 @@ export type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType>({
   user: undefined,
+  loading: true,
   signUp: async () => ({ error: null }),
   signIn: async () => ({ success: true }),
   signOut: async () => {},
@@ -101,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
   
   return (
-    <AuthContext.Provider value={{ user, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )

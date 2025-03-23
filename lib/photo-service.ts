@@ -161,7 +161,7 @@ export async function getAllPhotos(
     }
     
     // Get user profiles for each photo
-    const userIds = [...new Set(data.map(photo => photo.user_id))]
+    const userIds = Array.from(new Set(data.map(photo => photo.user_id)))
     
     const { data: profiles } = await supabase
       .from('profiles')
@@ -169,7 +169,7 @@ export async function getAllPhotos(
       .in('id', userIds)
     
     // Create a map of user profiles by ID for quick lookup
-    const profileMap = (profiles || []).reduce((map, profile) => {
+    const profileMap: Record<string, any> = (profiles || []).reduce((map: Record<string, any>, profile) => {
       map[profile.id] = profile
       return map
     }, {})

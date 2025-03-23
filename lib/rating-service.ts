@@ -244,24 +244,29 @@ export async function getUserStats(userId: string): Promise<{
       .eq('user_id', userId)
     
     // Get average rating received
-    const { data: ratingsReceived } = await supabase
-      .from('ratings')
-      .select('rating')
-      .eq('photo_id', 'in', (subquery) => {
-        return subquery
-          .from('photos')
-          .select('id')
-          .eq('user_id', userId)
-      })
+    const { data: userPhotos } = await supabase
+      .from('photos')
+      .select('id')
+      .eq('user_id', userId);
+
+    // Get ratings for user's photos if they exist
+    const photoIds = userPhotos ? userPhotos.map(photo => photo.id) : [];
+
+    const { data: ratingsReceived } = photoIds.length > 0 
+      ? await supabase
+          .from('ratings')
+          .select('rating')
+          .in('photo_id', photoIds)
+      : { data: [] };
     
     // Calculate averages
     const averageRatingGiven = ratingsGiven && ratingsGiven.length > 0
       ? ratingsGiven.reduce((sum, r) => sum + r.rating, 0) / ratingsGiven.length
-      : 0
+      : 0;
     
     const averageRatingReceived = ratingsReceived && ratingsReceived.length > 0
       ? ratingsReceived.reduce((sum, r) => sum + r.rating, 0) / ratingsReceived.length
-      : 0
+      : 0;
     
     // Calculate rating distribution
     const distribution = {
