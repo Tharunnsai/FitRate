@@ -5,6 +5,7 @@ import { AuthProvider } from "@/lib/auth-context"
 import { ThemeProvider } from "@/components/theme-provider"
 import { MainNav } from "@/components/main-nav"
 import DefaultLayout from "./default-layout"
+import { FloatingSearchButton } from "@/components/floating-search-button"
 
 // Initialize the Inter font
 const inter = Inter({ subsets: ['latin'] })
@@ -34,6 +35,7 @@ export default function RootLayout({
             <DefaultLayout>
               <main>{children}</main>
             </DefaultLayout>
+            <FloatingSearchButton />
           </AuthProvider>
         </ThemeProvider>
       </body>

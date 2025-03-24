@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { Home, User, Upload, Search, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
+import { NotificationsPopover } from "@/components/notifications"
 
 export function MainNav() {
   const pathname = usePathname()
@@ -34,7 +35,7 @@ export function MainNav() {
               </Button>
               
               <Button variant="ghost" size="icon" asChild>
-                <Link href="/search" className={pathname === "/search" ? "text-primary" : ""}>
+                <Link href="/discover" className={pathname === "/discover" ? "text-primary" : ""}>
                   <Search className="h-5 w-5" />
                   <span className="sr-only">Search</span>
                 </Link>
@@ -46,6 +47,8 @@ export function MainNav() {
                   <span className="sr-only">Upload</span>
                 </Link>
               </Button>
+              
+              <NotificationsPopover />
               
               <Button variant="ghost" size="icon" asChild>
                 <Link href="/profile" className={pathname === "/profile" ? "text-primary" : ""}>

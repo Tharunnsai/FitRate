@@ -1,174 +1,180 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import Link from "next/link"
-import { useAuth } from "@/lib/auth-context"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Upload, ImageIcon } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { uploadPhoto } from "@/lib/photo-service"
+import { useAuth } from "@/lib/auth-context"
+import { useRouter } from "next/navigation"
+import { Loader2, Upload } from "lucide-react"
 import Image from "next/image"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function UploadPage() {
   const { user } = useAuth()
-  const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
+  const router = useRouter()
+  
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
-
+  const [error, setError] = useState<string | null>(null)
+  
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0] || null
-    setFile(selectedFile)
-
-    if (selectedFile) {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0]
+      setFile(selectedFile)
+      
+      // Create preview
       const reader = new FileReader()
       reader.onloadend = () => {
         setPreview(reader.result as string)
       }
       reader.readAsDataURL(selectedFile)
-    } else {
-      setPreview(null)
     }
   }
-
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!file || !title || !user) return
-
+    
+    if (!user) {
+      setError("You must be logged in to upload photos")
+      return
+    }
+    
+    if (!file) {
+      setError("Please select an image to upload")
+      return
+    }
+    
+    if (!title.trim()) {
+      setError("Please provide a title for your photo")
+      return
+    }
+    
     try {
       setUploading(true)
+      setError(null)
       
-      // Use the new uploadPhoto function
-      const { success, error } = await uploadPhoto(
-        user.id, 
-        file, 
-        title, 
-        description
-      )
+      const result = await uploadPhoto(user.id, file, {
+        title: title.trim(),
+        description: description.trim() || undefined
+      })
       
-      if (!success) {
-        throw new Error(error?.message || "Failed to upload photo")
+      if (result.success && result.photoId) {
+        router.push('/profile')
+      } else {
+        throw result.error || new Error("Failed to upload photo")
       }
-      
-      setIsSuccess(true)
+    } catch (err) {
+      console.error("Error uploading image:", err)
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
       setUploading(false)
-      
-      // Reset form
-      setTitle('')
-      setDescription('')
-      setFile(null)
-      setPreview(null)
-      
-    } catch (error) {
-      console.error('Error uploading image:', error)
-      setUploading(false)
-      // Handle error appropriately
     }
   }
-
+  
+  if (!user) {
+    return (
+      <div className="container max-w-2xl py-12">
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle>Sign In Required</CardTitle>
+            <CardDescription>
+              You need to be signed in to upload photos.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="flex justify-center">
+            <Button onClick={() => router.push('/signin')}>
+              Sign In
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    )
+  }
+  
   return (
-    <div className="container max-w-4xl py-12">
-      <h1 className="text-3xl font-bold mb-8 text-center">Upload Your Fitness Photo</h1>
-
+    <div className="container max-w-2xl py-12">
       <Card>
         <CardHeader>
-          <CardTitle>Share your progress</CardTitle>
-          <CardDescription>Upload a photo to share with the community and get feedback</CardDescription>
+          <CardTitle>Upload Photo</CardTitle>
+          <CardDescription>
+            Share your progress with the community
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., 3 months of training"
+              <Input 
+                id="title" 
+                value={title} 
+                onChange={(e) => setTitle(e.target.value)} 
+                placeholder="E.g., 3 Months Progress"
                 required
               />
             </div>
-
+            
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Share details about your fitness journey..."
+              <Label htmlFor="description">Description (Optional)</Label>
+              <Textarea 
+                id="description" 
+                value={description} 
+                onChange={(e) => setDescription(e.target.value)} 
+                placeholder="Share details about your fitness journey" 
                 rows={3}
               />
             </div>
-
+            
             <div className="space-y-2">
               <Label htmlFor="photo">Photo</Label>
-              <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-md p-6 relative">
-                <input
-                  id="photo"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  required
-                />
-
-                {preview ? (
-                  <div className="relative w-full max-h-[300px] overflow-hidden rounded-md">
-                    <Image 
-                      src={preview || "/placeholder.svg"} 
-                      alt="Preview" 
-                      width={600}
-                      height={400}
-                      className="w-full h-auto object-contain" 
-                    />
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-center p-6">
-                    <ImageIcon className="h-10 w-10 text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500">Drag and drop your image here, or click to select</p>
-                    <p className="text-xs text-gray-400 mt-1">PNG, JPG, GIF up to 10MB</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <Button type="submit" className="w-full" disabled={uploading || !file || !title}>
-              {uploading ? (
-                <span className="flex items-center">
-                  <Upload className="mr-2 h-4 w-4 animate-spin" />
-                  Uploading...
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload Photo
-                </span>
+              <Input 
+                id="photo" 
+                type="file" 
+                accept="image/*" 
+                onChange={handleFileChange} 
+                required
+              />
+              
+              {preview && (
+                <div className="mt-4 relative aspect-[3/4] w-full max-w-md mx-auto border rounded-md overflow-hidden">
+                  <Image 
+                    src={preview} 
+                    alt="Preview" 
+                    fill
+                    className="object-cover"
+                  />
+                </div>
               )}
-            </Button>
-          </form>
-
-          {isSuccess && (
-            <div className="mt-4">
-              <Alert>
-                <AlertDescription>
-                  Your photo was uploaded successfully!
-                </AlertDescription>
-              </Alert>
-              <div className="mt-4 flex justify-center">
-                <Button asChild>
-                  <Link href="/gallery">View in Gallery</Link>
-                </Button>
-              </div>
             </div>
-          )}
+            
+            <div className="pt-4">
+              <Button type="submit" className="w-full" disabled={uploading}>
+                {uploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Photo
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>

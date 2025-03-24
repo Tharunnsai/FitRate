@@ -54,9 +54,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return
     
-    const authRequiredPages = ['/upload', '/profile']
+    const authRequiredPages = ['/upload', '/profile', '/users/']
     const authPages = ['/login', '/signup']
-    const publicPages = ['/', '/gallery']
+    const publicPages = ['/', '/gallery', '/discover']
     
     if (!user && authRequiredPages.some(page => pathname.startsWith(page))) {
       // Redirect to login if trying to access auth-required pages
@@ -67,7 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (user && pathname === '/') {
       // Redirect to gallery if authenticated user tries to access the landing page
       router.push('/gallery')
-    } else if (!publicPages.includes(pathname) && !authRequiredPages.some(page => pathname.startsWith(page)) && !authPages.includes(pathname)) {
+    } else if (!publicPages.some(page => pathname.startsWith(page)) && 
+               !authRequiredPages.some(page => pathname.startsWith(page)) && 
+               !authPages.includes(pathname)) {
       // For any other non-existent routes, redirect based on auth status
       router.push(user ? '/gallery' : '/')
     }

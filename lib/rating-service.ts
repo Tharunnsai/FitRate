@@ -8,24 +8,6 @@ export type Rating = {
   created_at: string
 }
 
-export type Activity = {
-  id: string
-  user_id: string
-  activity_type: 'rating' | 'like' | 'comment' | 'upload'
-  photo_id: string
-  rating?: number
-  created_at: string
-  // These will be populated from joins
-  photo?: {
-    title: string
-    image_url: string
-  }
-  user?: {
-    name: string
-    avatar: string
-  }
-}
-
 // Rate a photo
 export async function ratePhoto(
   userId: string,
@@ -33,15 +15,22 @@ export async function ratePhoto(
   rating: number
 ): Promise<{ success: boolean, error?: Error }> {
   try {
+    console.log(`Rating photo: userId=${userId}, photoId=${photoId}, rating=${rating}`);
+    
     // Check if user has already rated this photo
     const { data: existingRating, error: checkError } = await supabase
       .from('ratings')
-      .select('id')
+      .select('*')
       .eq('user_id', userId)
       .eq('photo_id', photoId)
       .maybeSingle()
     
-    if (checkError) throw checkError
+    if (checkError) {
+      console.error('Error checking existing rating:', checkError);
+      throw checkError;
+    }
+    
+    console.log('Existing rating:', existingRating);
     
     let result;
     
@@ -51,14 +40,18 @@ export async function ratePhoto(
         .from('ratings')
         .update({ 
           rating,
-          created_at: new Date().toISOString() // Update timestamp for activity tracking
+          created_at: new Date().toISOString()
         })
         .eq('id', existingRating.id)
     } else {
+      // Create a new UUID for the rating
+      const ratingId = crypto.randomUUID();
+      
       // Insert new rating
       result = await supabase
         .from('ratings')
         .insert({
+          id: ratingId,
           user_id: userId,
           photo_id: photoId,
           rating,
@@ -66,7 +59,14 @@ export async function ratePhoto(
         })
     }
     
-    if (result.error) throw result.error
+    if (result.error) {
+      console.error('Error saving rating:', result.error);
+      throw result.error;
+    }
+    
+    console.log('Rating saved successfully');
+    
+    // No longer creating notifications for ratings
     
     return { success: true }
   } catch (error) {
@@ -78,28 +78,26 @@ export async function ratePhoto(
   }
 }
 
-// Get a user's rating for a specific photo
+// Get a user's rating for a photo
 export async function getUserRating(
-  userId: string,
+  userId: string, 
   photoId: string
 ): Promise<number | null> {
   try {
+    // Using select('*') instead of select('rating') to avoid 406 error
     const { data, error } = await supabase
       .from('ratings')
-      .select('rating')
+      .select('*')
       .eq('user_id', userId)
       .eq('photo_id', photoId)
-      .single()
+      .maybeSingle()
     
     if (error) {
-      // If no rating found, return null
-      if (error.code === 'PGRST116') {
-        return null
-      }
+      console.error('Error fetching user rating:', error)
       throw error
     }
     
-    return data.rating
+    return data ? data.rating : null
   } catch (error) {
     console.error('Error getting user rating:', error)
     return null
@@ -141,76 +139,6 @@ export async function getUserRatings(
   } catch (error) {
     console.error('Error getting user ratings:', error)
     return {}
-  }
-}
-
-// Get recent activities
-export async function getRecentActivities(
-  limit: number = 10
-): Promise<Activity[]> {
-  try {
-    const { data, error } = await supabase
-      .from('activities')
-      .select(`
-        *,
-        photo:photo_id (
-          title,
-          image_url
-        ),
-        profiles:user_id (
-          username,
-          full_name,
-          avatar_url
-        )
-      `)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    
-    if (error) throw error
-    
-    // Transform the data
-    return (data || []).map(activity => {
-      const profile = activity.profiles || {}
-      return {
-        ...activity,
-        profiles: undefined,
-        user: {
-          name: profile.full_name || profile.username || 'User',
-          avatar: profile.avatar_url || '/placeholder-user.jpg'
-        }
-      }
-    })
-  } catch (error) {
-    console.error('Error getting recent activities:', error)
-    return []
-  }
-}
-
-// Get user's recent activities
-export async function getUserActivities(
-  userId: string,
-  limit: number = 10
-): Promise<Activity[]> {
-  try {
-    const { data, error } = await supabase
-      .from('activities')
-      .select(`
-        *,
-        photo:photo_id (
-          title,
-          image_url
-        )
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    
-    if (error) throw error
-    
-    return data || []
-  } catch (error) {
-    console.error('Error getting user activities:', error)
-    return []
   }
 }
 

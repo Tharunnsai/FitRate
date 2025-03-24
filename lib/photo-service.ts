@@ -4,68 +4,181 @@ export type Photo = {
   id: string
   user_id: string
   title: string
-  description: string
+  description?: string
   image_url: string
   rating: number
   votes_count: number
   likes_count: number
+  comments_count: number
   created_at: string
   updated_at: string
+  // Joined fields
   user?: {
-    name: string
-    avatar: string
+    username: string
+    avatar_url?: string
+    name?: string
   }
 }
 
-export async function uploadPhoto(
-  userId: string, 
-  file: File, 
-  title: string, 
-  description: string
-): Promise<{ success: boolean, photo?: Photo, error?: Error }> {
+export type Comment = {
+  id: string
+  photo_id: string
+  user_id: string
+  content: string
+  created_at: string
+  user?: {
+    username: string
+    avatar_url?: string
+  }
+}
+
+// Get all photos with optional filtering and pagination
+export async function getAllPhotos(
+  options: {
+    page?: number, 
+    limit?: number, 
+    orderBy?: 'latest' | 'popular' | 'top_rated',
+    userId?: string
+  } = {}
+): Promise<Photo[]> {
   try {
-    // 1. Upload the image to Supabase Storage
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+    const { 
+      page = 1, 
+      limit = 20, 
+      orderBy = 'latest',
+      userId
+    } = options
     
-    const { error: uploadError } = await supabase.storage
-      .from('images')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
-      })
-      
-    if (uploadError) {
-      throw uploadError
+    let query = supabase
+      .from('photos')
+      .select(`
+        *,
+        user:user_id (
+          username,
+          avatar_url,
+          full_name
+        )
+      `)
+    
+    // Apply filtering
+    if (userId) {
+      query = query.eq('user_id', userId)
     }
     
-    // 2. Get the public URL
+    // Apply ordering
+    if (orderBy === 'latest') {
+      query = query.order('created_at', { ascending: false })
+    } else if (orderBy === 'popular') {
+      query = query.order('votes_count', { ascending: false })
+    } else if (orderBy === 'top_rated') {
+      query = query.order('rating', { ascending: false })
+    }
+    
+    // Apply pagination
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+    query = query.range(from, to)
+    
+    const { data, error } = await query
+    
+    if (error) throw error
+    
+    // Transform the result to match our Photo type
+    return (data || []).map(item => ({
+      ...item,
+      user: item.user ? {
+        username: item.user.username,
+        avatar_url: item.user.avatar_url,
+        name: item.user.full_name
+      } : undefined
+    }))
+  } catch (error) {
+    console.error('Error fetching photos:', error)
+    return []
+  }
+}
+
+// Get a single photo by ID with related data
+export async function getPhoto(photoId: string): Promise<Photo | null> {
+  try {
+    const { data, error } = await supabase
+      .from('photos')
+      .select(`
+        *,
+        user:user_id (
+          username,
+          avatar_url,
+          full_name
+        )
+      `)
+      .eq('id', photoId)
+      .single()
+    
+    if (error) throw error
+    
+    return {
+      ...data,
+      user: data.user ? {
+        username: data.user.username,
+        avatar_url: data.user.avatar_url,
+        name: data.user.full_name
+      } : undefined
+    }
+  } catch (error) {
+    console.error('Error fetching photo:', error)
+    return null
+  }
+}
+
+// Get photos uploaded by a specific user
+export async function getUserPhotos(userId: string): Promise<Photo[]> {
+  return getAllPhotos({ userId, orderBy: 'latest', limit: 50 })
+}
+
+// Upload a new photo
+export async function uploadPhoto(
+  userId: string,
+  file: File,
+  metadata: { title: string, description?: string }
+): Promise<{ success: boolean, photoId?: string, error?: Error }> {
+  try {
+    // Generate a unique file name
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${userId.slice(0, 8)}_${Date.now()}.${fileExt}`
+    
+    // Upload the image file to storage
+    const { error: uploadError } = await supabase.storage
+      .from('images')
+      .upload(fileName, file)
+    
+    if (uploadError) throw uploadError
+    
+    // Get the public URL for the uploaded image
     const { data: urlData } = supabase.storage
       .from('images')
       .getPublicUrl(fileName)
     
-    // 3. Save the metadata to the photos table
-    const photoData = {
-      user_id: userId,
-      title,
-      description,
-      image_url: urlData.publicUrl,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }
-    
-    const { data, error } = await supabase
+    // Create the photo record
+    const photoId = crypto.randomUUID()
+    const { error: insertError } = await supabase
       .from('photos')
-      .insert(photoData)
-      .select()
-      .single()
+      .insert({
+        id: photoId,
+        user_id: userId,
+        title: metadata.title,
+        description: metadata.description || null,
+        image_url: urlData.publicUrl,
+        rating: 0,
+        votes_count: 0,
+        likes_count: 0,
+        comments_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
     
-    if (error) {
-      throw error
-    }
+    if (insertError) throw insertError
     
-    return { success: true, photo: data }
-    
+    return { success: true, photoId }
   } catch (error) {
     console.error('Error uploading photo:', error)
     return { 
@@ -75,184 +188,351 @@ export async function uploadPhoto(
   }
 }
 
-export async function getUserPhotos(userId: string): Promise<Photo[]> {
+// Update a photo's metadata
+export async function updatePhoto(
+  photoId: string,
+  userId: string,
+  updates: { title?: string, description?: string }
+): Promise<{ success: boolean, error?: Error }> {
   try {
-    const { data, error } = await supabase
+    // Verify ownership
+    const { data: photo, error: fetchError } = await supabase
       .from('photos')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-    
-    if (error) {
-      console.error('Error fetching user photos:', error)
-      return []
-    }
-    
-    // Get the user's profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('username, full_name, avatar_url')
-      .eq('id', userId)
+      .select('user_id')
+      .eq('id', photoId)
       .single()
     
-    // Add user info to each photo
-    const photosWithUserInfo = data.map(photo => ({
-      ...photo,
-      user: {
-        name: profile ? (profile.full_name || profile.username) : 'User',
-        avatar: profile?.avatar_url || '/placeholder-user.jpg'
-      }
-    }))
+    if (fetchError) throw fetchError
     
-    return photosWithUserInfo || []
+    if (photo.user_id !== userId) {
+      return { 
+        success: false, 
+        error: new Error('You do not have permission to update this photo') 
+      }
+    }
+    
+    // Update the photo
+    const { error: updateError } = await supabase
+      .from('photos')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', photoId)
+    
+    if (updateError) throw updateError
+    
+    return { success: true }
   } catch (error) {
-    console.error('Error in getUserPhotos:', error)
+    console.error('Error updating photo:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error : new Error(String(error)) 
+    }
+  }
+}
+
+// Delete a photo
+export async function deletePhoto(
+  photoId: string,
+  userId?: string
+): Promise<boolean> {
+  try {
+    // First get the photo to check ownership if userId is provided
+    if (userId) {
+      const { data: photo } = await supabase
+        .from('photos')
+        .select('user_id')
+        .eq('id', photoId)
+        .single()
+      
+      // Ensure the user owns this photo
+      if (photo && photo.user_id !== userId) {
+        return false
+      }
+    }
+    
+    // Delete the photo
+    const { error } = await supabase
+      .from('photos')
+      .delete()
+      .eq('id', photoId)
+    
+    if (error) throw error
+    
+    return true
+  } catch (error) {
+    console.error('Error deleting photo:', error)
+    return false
+  }
+}
+
+// Like a photo (simplified - no notification creation)
+export async function likePhoto(
+  userId: string,
+  photoId: string
+): Promise<{ success: boolean, error?: Error }> {
+  try {
+    // Check if already liked
+    const { data: existingLike } = await supabase
+      .from('likes')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('photo_id', photoId)
+      .maybeSingle()
+    
+    if (existingLike) {
+      return { success: true } // Already liked
+    }
+    
+    // Create a new UUID for the like
+    const likeId = crypto.randomUUID()
+    
+    // Insert new like
+    const { error } = await supabase
+      .from('likes')
+      .insert({
+        id: likeId,
+        user_id: userId,
+        photo_id: photoId,
+        created_at: new Date().toISOString()
+      })
+    
+    if (error) throw error
+    
+    // No notification creation
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Error liking photo:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error : new Error(String(error)) 
+    }
+  }
+}
+
+// Unlike a photo
+export async function unlikePhoto(
+  userId: string,
+  photoId: string
+): Promise<{ success: boolean, error?: Error }> {
+  try {
+    const { error } = await supabase
+      .from('likes')
+      .delete()
+      .eq('user_id', userId)
+      .eq('photo_id', photoId)
+    
+    if (error) throw error
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Error unliking photo:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error : new Error(String(error)) 
+    }
+  }
+}
+
+// Check if a user has liked a photo
+export async function hasLikedPhoto(
+  userId: string,
+  photoId: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('likes')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('photo_id', photoId)
+      .maybeSingle()
+    
+    if (error) throw error
+    
+    return !!data
+  } catch (error) {
+    console.error('Error checking like status:', error)
+    return false
+  }
+}
+
+// Get comments for a photo
+export async function getPhotoComments(photoId: string): Promise<Comment[]> {
+  try {
+    const { data, error } = await supabase
+      .from('comments')
+      .select(`
+        *,
+        user:user_id (
+          username,
+          avatar_url
+        )
+      `)
+      .eq('photo_id', photoId)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    
+    return (data || []).map(comment => ({
+      ...comment,
+      user: comment.user ? {
+        username: comment.user.username,
+        avatar_url: comment.user.avatar_url
+      } : undefined
+    }))
+  } catch (error) {
+    console.error('Error fetching comments:', error)
     return []
   }
 }
 
-export async function getAllPhotos(
-  sortBy: 'recent' | 'top-rated' | 'most-liked' = 'recent',
-  page: number = 1,
-  limit: number = 12
-): Promise<{ photos: Photo[], hasMore: boolean }> {
+// Add a comment to a photo (simplified - no notification creation)
+export async function addComment(
+  userId: string,
+  photoId: string,
+  content: string
+): Promise<{ success: boolean, commentId?: string, error?: Error }> {
   try {
-    // First, get the photos without the join
-    let query = supabase
-      .from('photos')
-      .select('*')
-    
-    // Apply sorting
-    if (sortBy === 'recent') {
-      query = query.order('created_at', { ascending: false })
-    } else if (sortBy === 'top-rated') {
-      query = query.order('rating', { ascending: false })
-    } else if (sortBy === 'most-liked') {
-      query = query.order('likes_count', { ascending: false })
-    }
-    
-    // Apply pagination
-    const from = (page - 1) * limit
-    const to = from + limit - 1
-    
-    query = query.range(from, to)
-    
-    const { data, error, count } = await query
-    
-    if (error) {
-      throw error
-    }
-    
-    // Get user profiles separately
-    const userIds = Array.from(new Set(data.map(photo => photo.user_id)))
-    
-    let profiles: Array<{id: string, username?: string, avatar_url?: string}> = []
-    if (userIds.length > 0) {
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('id, username, avatar_url')
-        .in('id', userIds)
-      
-      profiles = profilesData || []
-    }
-    
-    // Create a map for quick lookup
-    const profileMap: Record<string, {id: string, username?: string, avatar_url?: string}> = {}
-    profiles.forEach(profile => {
-      profileMap[profile.id] = profile
-    })
-    
-    // Transform the data to match our Photo type
-    const photos: Photo[] = data.map(item => ({
-      id: item.id,
-      user_id: item.user_id,
-      title: item.title,
-      description: item.description,
-      image_url: item.image_url,
-      rating: item.rating || 0,
-      votes_count: item.votes_count || 0,
-      likes_count: item.likes_count || 0,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      user: {
-        name: profileMap[item.user_id]?.username || 'Anonymous',
-        avatar: profileMap[item.user_id]?.avatar_url || '/placeholder-user.jpg'
+    // Validate
+    if (!content.trim()) {
+      return { 
+        success: false, 
+        error: new Error('Comment cannot be empty') 
       }
-    }))
+    }
     
-    // Check if there are more photos
-    const hasMore = count ? from + photos.length < count : false
+    // Create a new UUID for the comment
+    const commentId = crypto.randomUUID()
     
-    return { photos, hasMore }
-  } catch (error) {
-    console.error('Error fetching photos:', error)
-    return { photos: [], hasMore: false }
-  }
-}
-
-export async function getPhotoById(id: string): Promise<Photo | null> {
-  try {
-    const { data, error } = await supabase
-      .from('photos')
-      .select('*')
-      .eq('id', id)
-      .single()
+    // Insert comment
+    const { error } = await supabase
+      .from('comments')
+      .insert({
+        id: commentId,
+        user_id: userId,
+        photo_id: photoId,
+        content: content.trim(),
+        created_at: new Date().toISOString()
+      })
     
     if (error) throw error
     
-    // Get user profile for the photo
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, username, full_name, avatar_url')
-      .eq('id', data.user_id)
-      .single()
+    // No notification creation
     
-    return {
-      ...data,
-      user: {
-        name: profile ? (profile.full_name || profile.username) : 'User',
-        avatar: profile?.avatar_url || '/placeholder-user.jpg'
-      }
-    }
+    return { success: true, commentId }
   } catch (error) {
-    console.error('Error fetching photo:', error)
-    return null
+    console.error('Error adding comment:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error : new Error(String(error)) 
+    }
   }
 }
 
-export async function deletePhoto(id: string, userId: string): Promise<boolean> {
-  // First get the photo to get the image URL
-  const photo = await getPhotoById(id)
-  
-  if (!photo || photo.user_id !== userId) {
-    return false
+// Delete a comment
+export async function deleteComment(
+  commentId: string,
+  userId: string
+): Promise<{ success: boolean, error?: Error }> {
+  try {
+    // Verify ownership
+    const { data: comment, error: fetchError } = await supabase
+      .from('comments')
+      .select('user_id')
+      .eq('id', commentId)
+      .single()
+    
+    if (fetchError) throw fetchError
+    
+    if (comment.user_id !== userId) {
+      return { 
+        success: false, 
+        error: new Error('You do not have permission to delete this comment') 
+      }
+    }
+    
+    // Delete the comment
+    const { error } = await supabase
+      .from('comments')
+      .delete()
+      .eq('id', commentId)
+    
+    if (error) throw error
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Error deleting comment:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error : new Error(String(error)) 
+    }
   }
-  
-  // Delete from the database
-  const { error } = await supabase
-    .from('photos')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', userId)
-  
-  if (error) {
-    console.error('Error deleting photo:', error)
-    return false
+}
+
+// Get user's photos by username
+export async function getUserPhotosByUsername(username: string): Promise<Photo[]> {
+  try {
+    if (!username) {
+      console.error('getUserPhotosByUsername: No username provided');
+      return [];
+    }
+    
+    // First get the user ID from the username
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', username)
+      .single()
+    
+    if (profileError) {
+      console.error('Error fetching profile for photos:', profileError);
+      throw profileError;
+    }
+    
+    if (!profileData) {
+      console.log(`No profile found for username: ${username}`);
+      return [];
+    }
+    
+    // Make sure we have a valid profile object, not an array
+    const profile = Array.isArray(profileData) ? profileData[0] : profileData;
+    
+    if (!profile || !profile.id) {
+      console.log(`Invalid profile data for username: ${username}`);
+      return [];
+    }
+    
+    console.log(`Fetching photos for user ID: ${profile.id}`);
+    
+    // Then get the photos for that user
+    const { data, error } = await supabase
+      .from('photos')
+      .select(`
+        *,
+        user:user_id (
+          username,
+          avatar_url,
+          full_name
+        )
+      `)
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    
+    // Transform the result to match our Photo type
+    return (data || []).map(item => ({
+      ...item,
+      user: item.user ? {
+        username: item.user.username,
+        avatar_url: item.user.avatar_url,
+        name: item.user.full_name
+      } : undefined
+    }))
+  } catch (error) {
+    console.error('Error fetching user photos by username:', error)
+    return []
   }
-  
-  // Extract filename from the URL
-  const urlParts = photo.image_url.split('/')
-  const fileName = urlParts[urlParts.length - 1]
-  
-  // Delete from storage
-  const { error: storageError } = await supabase.storage
-    .from('images')
-    .remove([fileName])
-  
-  if (storageError) {
-    console.error('Error deleting photo from storage:', storageError)
-    // We still return true because the database record was deleted
-  }
-  
-  return true
 } 
