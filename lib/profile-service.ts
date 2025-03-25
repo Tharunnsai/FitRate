@@ -507,3 +507,39 @@ export async function getPopularProfiles(limit: number = 10): Promise<Profile[]>
     return []
   }
 }
+
+
+// Get a single photo by ID
+export async function getPhotoById(photoId: string): Promise<Photo | null> {
+  try {
+    const { data, error } = await supabase
+      .from('photos')
+      .select(`
+        *,
+        user:user_id (
+          username,
+          avatar_url,
+          full_name
+        )
+      `)
+      .eq('id', photoId)
+      .single()
+    
+    if (error) throw error
+    
+    if (!data) return null
+    
+    // Transform the result to match our Photo type
+    return {
+      ...data,
+      user: data.user ? {
+        username: data.user.username,
+        avatar_url: data.user.avatar_url,
+        name: data.user.full_name
+      } : undefined
+    }
+  } catch (error) {
+    console.error('Error fetching photo by ID:', error)
+    return null
+  }
+} 

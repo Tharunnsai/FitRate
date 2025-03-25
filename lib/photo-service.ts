@@ -98,9 +98,14 @@ export async function getAllPhotos(
   }
 }
 
-// Get a single photo by ID with related data
+// Get a single photo by ID
 export async function getPhoto(photoId: string): Promise<Photo | null> {
   try {
+    if (!photoId) {
+      console.error('getPhoto: No photoId provided')
+      return null
+    }
+    
     const { data, error } = await supabase
       .from('photos')
       .select(`
@@ -114,8 +119,30 @@ export async function getPhoto(photoId: string): Promise<Photo | null> {
       .eq('id', photoId)
       .single()
     
-    if (error) throw error
+    if (error) {
+      console.error('Error fetching photo:', error)
+      throw error
+    }
     
+    if (!data) return null
+    
+    // Check if data has a numeric index structure (array-like)
+    if (data[0] && typeof data[0] === 'object') {
+      console.log('Data has array-like structure, extracting first item')
+      const photoData = data[0]
+      
+      // Transform the result to match our Photo type
+      return {
+        ...photoData,
+        user: photoData.user ? {
+          username: photoData.user.username,
+          avatar_url: photoData.user.avatar_url,
+          name: photoData.user.full_name
+        } : undefined
+      }
+    }
+    
+    // Normal object structure
     return {
       ...data,
       user: data.user ? {
@@ -125,7 +152,7 @@ export async function getPhoto(photoId: string): Promise<Photo | null> {
       } : undefined
     }
   } catch (error) {
-    console.error('Error fetching photo:', error)
+    console.error('Error fetching photo by ID:', error)
     return null
   }
 }
@@ -204,7 +231,18 @@ export async function updatePhoto(
     
     if (fetchError) throw fetchError
     
-    if (photo.user_id !== userId) {
+    // Check if photo exists and has the expected structure
+    if (!photo) {
+      return { 
+        success: false, 
+        error: new Error('Photo not found') 
+      }
+    }
+    
+    // Handle both array-like and object structures
+    const photoUserId = photo[0]?.user_id || photo.user_id
+    
+    if (photoUserId !== userId) {
       return { 
         success: false, 
         error: new Error('You do not have permission to update this photo') 
@@ -232,38 +270,95 @@ export async function updatePhoto(
   }
 }
 
-// Delete a photo
+// Delete a photo and all related data
 export async function deletePhoto(
-  photoId: string,
-  userId?: string
-): Promise<boolean> {
+  photoId: string, 
+  userId: string
+): Promise<{ success: boolean, error?: Error }> {
   try {
-    // First get the photo to check ownership if userId is provided
-    if (userId) {
-      const { data: photo } = await supabase
-        .from('photos')
-        .select('user_id')
-        .eq('id', photoId)
-        .single()
+    // First, verify the user owns this photo
+    const { data: photo, error: fetchError } = await supabase
+      .from('photos')
+      .select('image_url, user_id')
+      .eq('id', photoId)
+      .single();
+    
+    if (fetchError) throw fetchError;
+    
+    if (!photo) {
+      throw new Error('Photo not found');
+    }
+    
+    // Handle both array-like and object structures
+    const photoData = photo[0] || photo;
+    
+    // Safety check to ensure photoData exists and has user_id
+    if (!photoData || !photoData.user_id) {
+      console.error('Invalid photo data structure:', JSON.stringify(photo, null, 2));
+      throw new Error('Invalid photo data structure');
+    }
+    
+    // Security check - ensure the user owns this photo
+    if (photoData.user_id !== userId) {
+      throw new Error('You do not have permission to delete this photo');
+    }
+    
+    // Extract the filename from the URL
+    const imageUrl = photoData.image_url;
+    const fileName = imageUrl ? imageUrl.split('/').pop() : null;
+    
+    // Begin a transaction to delete all related data
+    // 1. Delete comments
+    const { error: commentsError } = await supabase
+      .from('comments')
+      .delete()
+      .eq('photo_id', photoId);
+    
+    if (commentsError) throw commentsError;
+    
+    // 2. Delete ratings
+    const { error: ratingsError } = await supabase
+      .from('ratings')
+      .delete()
+      .eq('photo_id', photoId);
+    
+    if (ratingsError) throw ratingsError;
+    
+    // 3. Delete likes
+    const { error: likesError } = await supabase
+      .from('likes')
+      .delete()
+      .eq('photo_id', photoId);
+    
+    if (likesError) throw likesError;
+    
+    // 4. Delete the photo record
+    const { error: photoError } = await supabase
+      .from('photos')
+      .delete()
+      .eq('id', photoId);
+    
+    if (photoError) throw photoError;
+    
+    // 5. Delete the image file from storage
+    if (fileName) {
+      const { error: storageError } = await supabase.storage
+        .from('images')
+        .remove([fileName]);
       
-      // Ensure the user owns this photo
-      if (photo && photo.user_id !== userId) {
-        return false
+      if (storageError) {
+        console.error('Error deleting image file:', storageError);
+        // We'll continue even if storage deletion fails
       }
     }
     
-    // Delete the photo
-    const { error } = await supabase
-      .from('photos')
-      .delete()
-      .eq('id', photoId)
-    
-    if (error) throw error
-    
-    return true
+    return { success: true };
   } catch (error) {
-    console.error('Error deleting photo:', error)
-    return false
+    console.error('Error deleting photo:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error : new Error(String(error)) 
+    };
   }
 }
 
@@ -535,4 +630,4 @@ export async function getUserPhotosByUsername(username: string): Promise<Photo[]
     console.error('Error fetching user photos by username:', error)
     return []
   }
-} 
+}

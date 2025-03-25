@@ -1,183 +1,390 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useRef } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
+import { uploadPhoto } from "@/lib/upload-service"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { uploadPhoto } from "@/lib/photo-service"
-import { useAuth } from "@/lib/auth-context"
-import { useRouter } from "next/navigation"
-import { Loader2, Upload } from "lucide-react"
-import Image from "next/image"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2, Upload, Image as ImageIcon, X, Check, Crop as CropIcon } from "lucide-react"
+import { Slider } from "@/components/ui/slider"
 
 export default function UploadPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const imageRef = useRef<HTMLImageElement | null>(null)
   
+  const [file, setFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
-  const [uploading, setUploading] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isCropping, setIsCropping] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [originalImage, setOriginalImage] = useState<string | null>(null)
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0]
-      setFile(selectedFile)
+    const selectedFile = e.target.files?.[0]
+    if (!selectedFile) return
+    
+    setFile(selectedFile)
+    
+    // Create a preview URL
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result as string
+      setPreviewUrl(result)
+      setOriginalImage(result)
+    }
+    reader.readAsDataURL(selectedFile)
+  }
+  
+  const handleCropStart = () => {
+    setIsCropping(true)
+  }
+  
+  const handleZoomChange = (value: number[]) => {
+    setZoom(value[0])
+    
+    // Apply zoom to the preview image
+    if (imageRef.current && originalImage && canvasRef.current) {
+      const img = imageRef.current
+      const canvas = canvasRef.current
+      const ctx = canvas.getContext('2d')
       
-      // Create preview
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPreview(reader.result as string)
+      if (ctx) {
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        
+        // Calculate dimensions while maintaining aspect ratio
+        const aspectRatio = img.naturalWidth / img.naturalHeight
+        
+        // Calculate the size based on zoom
+        let drawWidth, drawHeight
+        
+        if (aspectRatio > 1) {
+          // Landscape
+          drawHeight = canvas.height / zoom
+          drawWidth = drawHeight * aspectRatio
+        } else {
+          // Portrait
+          drawWidth = canvas.width / zoom
+          drawHeight = drawWidth / aspectRatio
+        }
+        
+        // Center the image
+        const offsetX = (canvas.width - drawWidth) / 2
+        const offsetY = (canvas.height - drawHeight) / 2
+        
+        // Draw the image with zoom
+        ctx.drawImage(
+          img,
+          offsetX,
+          offsetY,
+          drawWidth,
+          drawHeight
+        )
       }
-      reader.readAsDataURL(selectedFile)
+    }
+  }
+  
+  const handleCropCancel = () => {
+    setIsCropping(false)
+    setZoom(1)
+  }
+  
+  const handleCropConfirm = async () => {
+    if (!canvasRef.current || !file) return
+    
+    try {
+      // Convert canvas to blob
+      const canvas = canvasRef.current
+      
+      canvas.toBlob((blob) => {
+        if (!blob || !file) {
+          return
+        }
+        
+        // Create a new file from the blob
+        const croppedFile = new File([blob], file.name, {
+          type: 'image/jpeg',
+          lastModified: Date.now()
+        })
+        
+        setFile(croppedFile)
+        
+        // Update preview with cropped image
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          setPreviewUrl(reader.result as string)
+          setIsCropping(false)
+        }
+        reader.readAsDataURL(croppedFile)
+      }, 'image/jpeg', 0.95)
+    } catch (err) {
+      console.error('Error cropping image:', err)
+      setError('Failed to crop image')
     }
   }
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!user) {
-      setError("You must be logged in to upload photos")
+    if (!user || !file || !title.trim()) {
+      setError('Please provide a title and image')
       return
     }
     
-    if (!file) {
-      setError("Please select an image to upload")
-      return
-    }
-    
-    if (!title.trim()) {
-      setError("Please provide a title for your photo")
-      return
-    }
+    setLoading(true)
+    setError(null)
     
     try {
-      setUploading(true)
-      setError(null)
-      
-      const result = await uploadPhoto(user.id, file, {
+      const { success, photoId, error: uploadError } = await uploadPhoto({
+        userId: user.id,
+        file,
         title: title.trim(),
         description: description.trim() || undefined
       })
       
-      if (result.success && result.photoId) {
-        router.push('/profile')
-      } else {
-        throw result.error || new Error("Failed to upload photo")
+      if (!success || !photoId) {
+        throw uploadError || new Error('Failed to upload photo')
       }
+      
+      // Redirect to the photo detail page or profile
+      router.push(`/photos/${photoId}`)
     } catch (err) {
-      console.error("Error uploading image:", err)
-      setError(err instanceof Error ? err.message : String(err))
+      console.error('Error uploading photo:', err)
+      setError(err instanceof Error ? err.message : 'An error occurred during upload')
     } finally {
-      setUploading(false)
+      setLoading(false)
     }
   }
   
   if (!user) {
     return (
-      <div className="container max-w-2xl py-12">
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle>Sign In Required</CardTitle>
-            <CardDescription>
-              You need to be signed in to upload photos.
-            </CardDescription>
-          </CardHeader>
-          <CardFooter className="flex justify-center">
-            <Button onClick={() => router.push('/signin')}>
-              Sign In
-            </Button>
-          </CardFooter>
-        </Card>
+      <div className="container max-w-4xl py-8">
+        <Alert variant="destructive">
+          <AlertDescription>
+            You must be logged in to upload photos.
+          </AlertDescription>
+        </Alert>
       </div>
     )
   }
   
   return (
-    <div className="container max-w-2xl py-12">
+    <div className="container max-w-4xl py-8">
+      <h1 className="text-3xl font-bold mb-6">Upload Photo</h1>
+      
       <Card>
         <CardHeader>
-          <CardTitle>Upload Photo</CardTitle>
-          <CardDescription>
-            Share your progress with the community
-          </CardDescription>
+          <CardTitle>Share your fitness journey</CardTitle>
         </CardHeader>
-        <CardContent>
-          {error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
-              <Input 
-                id="title" 
-                value={title} 
-                onChange={(e) => setTitle(e.target.value)} 
-                placeholder="E.g., 3 Months Progress"
-                required
-              />
-            </div>
+        
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-6">
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             
-            <div className="space-y-2">
-              <Label htmlFor="description">Description (Optional)</Label>
-              <Textarea 
-                id="description" 
-                value={description} 
-                onChange={(e) => setDescription(e.target.value)} 
-                placeholder="Share details about your fitness journey" 
-                rows={3}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="photo">Photo</Label>
-              <Input 
-                id="photo" 
-                type="file" 
-                accept="image/*" 
-                onChange={handleFileChange} 
-                required
-              />
-              
-              {preview && (
-                <div className="mt-4 relative aspect-[3/4] w-full max-w-md mx-auto border rounded-md overflow-hidden">
-                  <Image 
-                    src={preview} 
-                    alt="Preview" 
-                    fill
-                    className="object-cover"
+            {isCropping && previewUrl ? (
+              <div className="space-y-4">
+                <h3 className="font-medium">Adjust your image</h3>
+                <div className="max-w-full overflow-auto">
+                  <div className="flex flex-col items-center">
+                    <canvas 
+                      ref={canvasRef}
+                      width={300}
+                      height={300}
+                      className="border rounded-md mb-4"
+                    />
+                    
+                    <img 
+                      ref={imageRef}
+                      src={previewUrl} 
+                      alt="Preview" 
+                      className="hidden"
+                      onLoad={(e) => {
+                        const img = e.target as HTMLImageElement
+                        if (canvasRef.current) {
+                          const canvas = canvasRef.current
+                          const ctx = canvas.getContext('2d')
+                          if (ctx) {
+                            // Draw the initial image centered in the canvas
+                            // while maintaining aspect ratio
+                            const aspectRatio = img.naturalWidth / img.naturalHeight
+                            let drawWidth, drawHeight, offsetX, offsetY
+                            
+                            if (aspectRatio > 1) {
+                              // Landscape
+                              drawHeight = canvas.height
+                              drawWidth = drawHeight * aspectRatio
+                              offsetX = (canvas.width - drawWidth) / 2
+                              offsetY = 0
+                            } else {
+                              // Portrait
+                              drawWidth = canvas.width
+                              drawHeight = drawWidth / aspectRatio
+                              offsetX = 0
+                              offsetY = (canvas.height - drawHeight) / 2
+                            }
+                            
+                            ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight)
+                          }
+                        }
+                      }}
+                    />
+                    
+                    <div className="w-full max-w-xs mt-4">
+                      <Label htmlFor="zoom" className="mb-2 block">Zoom</Label>
+                      <Slider
+                        id="zoom"
+                        min={0.5}
+                        max={2}
+                        step={0.1}
+                        value={[zoom]}
+                        onValueChange={handleZoomChange}
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 justify-end">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={handleCropCancel}
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="button" 
+                    onClick={handleCropConfirm}
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Apply Changes
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input 
+                    id="title" 
+                    value={title} 
+                    onChange={(e) => setTitle(e.target.value)} 
+                    placeholder="Give your photo a title"
+                    required
                   />
                 </div>
-              )}
-            </div>
-            
-            <div className="pt-4">
-              <Button type="submit" className="w-full" disabled={uploading}>
-                {uploading ? (
+                
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description (optional)</Label>
+                  <Textarea 
+                    id="description" 
+                    value={description} 
+                    onChange={(e) => setDescription(e.target.value)} 
+                    placeholder="Add more details about your photo"
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="photo">Photo</Label>
+                  {previewUrl ? (
+                    <div className="relative">
+                      <img 
+                        src={previewUrl} 
+                        alt="Preview" 
+                        className="max-w-full max-h-[300px] object-contain border rounded-md"
+                      />
+                      <div className="absolute top-2 right-2 flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="bg-white/80"
+                          onClick={handleCropStart}
+                        >
+                          <CropIcon className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="bg-white/80"
+                          onClick={() => {
+                            setFile(null)
+                            setPreviewUrl(null)
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border border-dashed rounded-md p-8 text-center">
+                      <Input 
+                        id="photo" 
+                        type="file" 
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                      <Label 
+                        htmlFor="photo" 
+                        className="flex flex-col items-center gap-2 cursor-pointer"
+                      >
+                        <ImageIcon className="h-8 w-8 text-gray-400" />
+                        <span className="text-sm font-medium">Click to select an image</span>
+                        <span className="text-xs text-gray-500">JPG, PNG, GIF up to 10MB</span>
+                      </Label>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+          
+          {!isCropping && (
+            <CardFooter className="flex justify-end gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => router.back()}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={loading || !file || !title.trim()}
+              >
+                {loading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Uploading...
                   </>
                 ) : (
                   <>
-                    <Upload className="mr-2 h-4 w-4" />
+                    <Upload className="h-4 w-4 mr-2" />
                     Upload Photo
                   </>
                 )}
               </Button>
-            </div>
-          </form>
-        </CardContent>
+            </CardFooter>
+          )}
+        </form>
       </Card>
     </div>
   )
 }
-

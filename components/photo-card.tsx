@@ -4,11 +4,11 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { getInitialRating,PhotoRating } from "@/components/photo-rating"
+import { getInitialRating, PhotoRating } from "@/components/photo-rating"
 import { Button } from "@/components/ui/button"
 import { Trash, Heart, MessageCircle, Share, UserPlus, UserMinus, Loader2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { likePhoto, unlikePhoto, hasLikedPhoto } from "@/lib/photo-service"
+import { likePhoto, unlikePhoto, hasLikedPhoto, deletePhoto } from "@/lib/photo-service"
 import { followUser, unfollowUser, isFollowing as checkFollowStatus } from "@/lib/profile-service"
 import { 
   Dialog,
@@ -19,6 +19,19 @@ import {
 import { CommentSection } from "@/components/comment-section"
 import Link from "next/link"
 import { getUserRating } from "@/lib/rating-service"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/components/ui/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface PhotoCardProps {
   id: string
@@ -53,6 +66,8 @@ export function PhotoCard({
   showDeleteButton,
   onDelete
 }: PhotoCardProps) {
+  const router = useRouter()
+  const { toast } = useToast()
   const { user } = useAuth()
   const [currentRating, setCurrentRating] = useState(rating || 0)
   const [currentLikes, setCurrentLikes] = useState(likesCount)
@@ -61,8 +76,8 @@ export function PhotoCard({
   const [isLoading, setIsLoading] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   
-  // Check if user has liked the photo
   useEffect(() => {
     async function checkLikeStatus() {
       if (!user) return
@@ -73,14 +88,11 @@ export function PhotoCard({
     checkLikeStatus()
   }, [user, id])
   
-  // Check if user is following the photo owner
   useEffect(() => {
     async function checkIsFollowing() {
       if (user && userId) {
         try {
-          // console.log(`In photo card: checking if ${user.id} follows ${userId}`);
           const following = await checkFollowStatus(user.id, userId);
-          // console.log(`Follow status: ${following}`);
           setIsFollowing(following);
         } catch (error) {
           console.error('Error checking follow status:', error);
@@ -139,6 +151,50 @@ export function PhotoCard({
   
   const isOwnPhoto = user && userId === user.id
   
+  const handleCardClick = () => {
+    router.push(`/photos/${id}`)
+  }
+  
+  const handleDelete = async () => {
+    if (!user) return
+    
+    setIsDeleting(true)
+    
+    try {
+      // Get the actual user ID from the photo data
+      const actualUserId = Array.isArray(userId) ? userId[0] : userId;
+      
+      console.log(`Attempting to delete photo ${id} by user ${user.id}, photo owner: ${actualUserId}`);
+      
+      const { success, error } = await deletePhoto(id, user.id)
+      
+      if (success) {
+        toast({
+          title: "Photo deleted",
+          description: "Your photo has been successfully deleted"
+        })
+        
+        // Always redirect to profile after deletion
+        router.push(`/profile`)
+        
+        // Still call onDelete if provided (for UI updates in parent components)
+        if (onDelete) {
+          onDelete()
+        }
+      } else {
+        throw error || new Error("Failed to delete photo")
+      }
+    } catch (err) {
+      console.error("Error deleting photo:", err)
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to delete photo"
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+  
   return (
     <>
       <Card className="overflow-hidden">
@@ -190,14 +246,7 @@ export function PhotoCard({
               {currentLikes > 0 && <span>{currentLikes}</span>}
             </Button>
             
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => setCommentsOpen(true)}
-            >
-              <MessageCircle className="h-4 w-4 mr-1" />
-              {commentsCount > 0 && <span>{commentsCount}</span>}
-            </Button>
+            <CommentSection photoId={id} />
             
             {userId && user && userId !== user.id && (
               <Button
@@ -257,14 +306,14 @@ export function PhotoCard({
         </CardFooter>
       </Card>
       
-      <Dialog open={commentsOpen} onOpenChange={setCommentsOpen}>
+      {/* <Dialog open={commentsOpen} onOpenChange={setCommentsOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Comments on {title}</DialogTitle>
           </DialogHeader>
           <CommentSection photoId={id} />
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
     </>
   )
 } 
