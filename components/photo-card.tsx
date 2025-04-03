@@ -197,123 +197,189 @@ export function PhotoCard({
   
   return (
     <>
-      <Card className="overflow-hidden">
-        <div className="relative aspect-square">
+      <Card className="overflow-hidden rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
+        {/* User info - Moved above the image */}
+        {username && (
+          <div className="flex items-center justify-between p-3 border-b">
+            <Link 
+              href={`/users/${username}`} 
+              className="flex items-center gap-2 group/user"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Avatar className="h-7 w-7 border border-gray-200">
+                <AvatarImage src={userAvatar || ""} alt={username} />
+                <AvatarFallback>{username[0]?.toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium group-hover/user:text-blue-600 transition-colors">
+                {username}
+              </span>
+            </Link>
+            
+            {!isOwnPhoto && user && userId && (
+              <Button
+                variant={isFollowing ? "outline" : "default"}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleFollow();
+                }}
+                disabled={followLoading}
+              >
+                {followLoading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : isFollowing ? (
+                  <>
+                    <UserMinus className="h-3 w-3 mr-1" />
+                    Unfollow
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-3 w-3 mr-1" />
+                    Follow
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        )}
+        
+        <div 
+          className="relative aspect-square overflow-hidden cursor-pointer group"
+          onClick={() => router.push(`/photos/${id}`)}
+        >
           <Image
             src={imageUrl}
             alt={title}
             fill
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            className="object-cover"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          
           {showDeleteButton && onDelete && (
-            <Button 
-              variant="destructive" 
-              size="icon" 
-              className="absolute top-2 right-2 opacity-80 hover:opacity-100"
-              onClick={onDelete}
-            >
-              <Trash className="h-4 w-4" />
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="destructive" 
+                  size="icon" 
+                  className="absolute top-2 right-2 opacity-80 hover:opacity-100 z-10"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Photo</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this photo? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={onDelete}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
+        
         <CardContent className="p-4">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-semibold text-lg truncate">{title}</h3>
-            <div className="flex items-center">
-              <span className="font-medium">{currentRating.toFixed(1)}</span>
-              <span className="text-gray-500 ml-1">({votesCount || 0})</span>
+          {/* Title and Rating */}
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="font-semibold text-lg truncate leading-tight" title={title}>{title}</h3>
+            <div className="flex items-center bg-amber-50 px-2 py-1 rounded-full">
+              <span className="font-medium text-amber-700">{currentRating.toFixed(1)}</span>
+              <span className="text-amber-500 ml-1 text-xs">({votesCount || 0})</span>
             </div>
           </div>
-          {description && (
-            <p className="text-sm text-gray-500 line-clamp-2 mb-4">{description}</p>
-          )}
-          <PhotoRating 
-            photoId={id} 
-            initialRating={0} 
-            onRatingChange={handleRatingChange} 
-          />
           
-          <div className="flex items-center gap-2 mt-4 pt-3 border-t">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              disabled={!user || isLoading}
-              onClick={handleLike}
-              className={isLiked ? "text-red-500" : ""}
-            >
-              <Heart className={`h-4 w-4 mr-1 ${isLiked ? "fill-current" : ""}`} />
-              {currentLikes > 0 && <span>{currentLikes}</span>}
-            </Button>
-            
-            <CommentSection photoId={id} />
-            
-            {userId && user && userId !== user.id && (
-              <Button
-                variant={isFollowing ? "outline" : "ghost"}
+          {/* Description */}
+          {description && (
+            <p className="text-sm text-gray-600 line-clamp-2 mb-4 leading-normal">{description}</p>
+          )}
+          
+          {/* Rating Stars */}
+          <div className="mt-2 mb-3">
+            <PhotoRating 
+              photoId={id} 
+              initialRating={0} 
+              onRatingChange={handleRatingChange} 
+            />
+          </div>
+          
+          {/* Divider */}
+          <div className="h-px w-full bg-gray-100 my-3"></div>
+          
+          {/* Actions */}
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost" 
                 size="sm"
-                className={isFollowing ? "text-primary" : ""}
-                disabled={followLoading}
-                onClick={handleToggleFollow}
+                disabled={!user || isLoading}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleLike();
+                }}
+                className={`px-2 ${isLiked ? "text-red-500 hover:text-red-600 hover:bg-red-50" : "text-gray-600 hover:text-gray-900"}`}
               >
-                {followLoading ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : isFollowing ? (
-                  <UserMinus className="h-4 w-4 mr-1" />
-                ) : (
-                  <UserPlus className="h-4 w-4 mr-1" />
-                )}
-                {isFollowing ? "Following" : "Follow"}
+                <Heart className={`h-4 w-4 mr-1.5 ${isLiked ? "fill-current" : ""}`} />
+                {currentLikes > 0 && <span className="text-sm">{currentLikes}</span>}
               </Button>
-            )}
+              
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="px-2 text-gray-600 hover:text-gray-900"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCommentsOpen(true);
+                }}
+              >
+                <MessageCircle className="h-4 w-4 mr-1.5" />
+                <span className="text-sm">{commentsCount}</span>
+              </Button>
+              
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="px-2 text-gray-600 hover:text-gray-900"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText(`${window.location.origin}/photos/${id}`);
+                  toast({
+                    title: "Link copied",
+                    description: "Photo link copied to clipboard"
+                  });
+                }}
+              >
+                <Share className="h-4 w-4" />
+              </Button>
+            </div>
             
-            <Button 
-              variant="ghost" 
-              size="sm"
-              className="ml-auto"
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({
-                    title: title,
-                    text: description || `Check out this fitness photo by ${username}`,
-                    url: window.location.origin + `/photos/${id}`
-                  }).catch(err => console.error('Error sharing:', err))
-                } else {
-                  navigator.clipboard.writeText(window.location.origin + `/photos/${id}`)
-                  alert('Link copied to clipboard!')
-                }
-              }}
-            >
-              <Share className="h-4 w-4" />
-            </Button>
+            {/* Date */}
+            {createdAt && (
+              <span className="text-xs text-gray-400">
+                {new Date(createdAt).toLocaleDateString(undefined, { 
+                  month: 'short', 
+                  day: 'numeric' 
+                })}
+              </span>
+            )}
           </div>
         </CardContent>
-        <CardFooter className="p-4 pt-0 border-t">
-          <div className="flex items-center">
-            <Avatar className="h-8 w-8 mr-2">
-              <AvatarImage src={userAvatar} />
-              <AvatarFallback>{username?.[0] || "U"}</AvatarFallback>
-            </Avatar>
-            <div>
-              <Link href={`/users/${username}`} className="text-sm font-medium hover:underline">{username || "Anonymous"}</Link>
-              {createdAt && (
-                <p className="text-xs text-gray-500">
-                  {new Date(createdAt).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-          </div>
-        </CardFooter>
       </Card>
       
-      {/* <Dialog open={commentsOpen} onOpenChange={setCommentsOpen}>
+      <Dialog open={commentsOpen} onOpenChange={setCommentsOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Comments on {title}</DialogTitle>
+            <DialogTitle>Comments</DialogTitle>
           </DialogHeader>
           <CommentSection photoId={id} />
         </DialogContent>
-      </Dialog> */}
+      </Dialog>
     </>
   )
 } 

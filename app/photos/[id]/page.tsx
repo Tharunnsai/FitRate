@@ -142,16 +142,16 @@ export default function PhotoDetailPage() {
           )}
           
           <div className="flex items-center justify-between py-4 border-t border-b">
-          <CardFooter className="p-4 pt-0 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <Heart className={`h-4 w-4 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
-                <span>{photo.likes_count || 0}</span>
-              </Button>
-            </div>
-            
-            <CommentSection photoId={photo.id} />
-          </CardFooter>
+            <CardFooter className="p-4 pt-0 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="gap-1">
+                  <Heart className={`h-4 w-4 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                  <span>{photo.likes_count || 0}</span>
+                </Button>
+              </div>
+              
+              <CommentSection photoId={photo.id} />
+            </CardFooter>
             
             <div className="flex items-center">
               <div className="flex items-center">

@@ -25,6 +25,16 @@ import { getUserStats } from "@/lib/rating-service"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PhotoCard } from "@/components/photo-card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { 
+  Sheet, 
+  SheetClose, 
+  SheetContent, 
+  SheetDescription, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetTrigger 
+} from "@/components/ui/sheet"
 
 type UserStats = {
   totalUploads: number
@@ -63,6 +73,11 @@ export default function ProfilePage() {
   const [followers, setFollowers] = useState<Profile[]>([])
   const [following, setFollowing] = useState<Profile[]>([])
   const [loadingFollowers, setLoadingFollowers] = useState(false)
+  
+  // Add state for modals/sheets and form visibility
+  const [showProfileForm, setShowProfileForm] = useState(false)
+  const [showFollowers, setShowFollowers] = useState(false)
+  const [showFollowing, setShowFollowing] = useState(false)
   
   // Fetch profile data when component mounts
   useEffect(() => {
@@ -161,6 +176,19 @@ export default function ProfilePage() {
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
+      
+      // Validate file is an image
+      if (!file.type.startsWith('image/')) {
+        setError("Please select an image file (JPEG, PNG, etc.)");
+        return;
+      }
+      
+      // Validate file size
+      if (file.size > 5 * 1024 * 1024) {
+        setError("File size too large (max 5MB)");
+        return;
+      }
+      
       setAvatarFile(file)
       
       // Create preview
@@ -185,7 +213,7 @@ export default function ProfilePage() {
     try {
       // Update profile information
       const { success: profileSuccess, error: profileError } = await updateProfile(user.id, {
-        username,
+      username,
         full_name: fullName,
         bio
       })
@@ -288,371 +316,488 @@ export default function ProfilePage() {
       </div>
     )
   }
-  
+
   return (
-    <div className="container py-10">
+    <div className="container py-6 px-4 md:px-0">
       <div className="max-w-4xl mx-auto">
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-8">
-          <Avatar className="w-24 h-24">
-            <AvatarImage src={profile.avatar_url || ""} alt={profile.username || "Profile"} />
-            <AvatarFallback>{profile.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || "U"}</AvatarFallback>
-          </Avatar>
+        {/* Instagram-style profile header */}
+        <div className="flex flex-col md:flex-row items-start gap-8 mb-6 pb-6 border-b">
+          {/* Larger avatar on the left */}
+          <div className="md:w-1/3 flex justify-center">
+            <Avatar className="w-32 h-32 md:w-36 md:h-36 border-2 border-white shadow">
+              <AvatarImage src={profile.avatar_url || ""} alt={profile.username || "Profile"} />
+              <AvatarFallback>{profile.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || "U"}</AvatarFallback>
+            </Avatar>
+          </div>
           
-          <div className="text-center sm:text-left">
-            <h1 className="text-2xl font-bold">{profile.username || "User"}</h1>
-            <p className="text-gray-500">{profile.full_name || ""}</p>
-            
-            <div className="flex items-center justify-center sm:justify-start gap-4 mt-2">
-              <div className="text-center">
-                <div className="font-medium">{userPhotos.length}</div>
-                <div className="text-xs text-gray-500">Posts</div>
-              </div>
-              <div className="text-center">
-                <div className="font-medium">{profile.followers_count || 0}</div>
-                <div className="text-xs text-gray-500">Followers</div>
-              </div>
-              <div className="text-center">
-                <div className="font-medium">{profile.following_count || 0}</div>
-                <div className="text-xs text-gray-500">Following</div>
-              </div>
+          {/* Profile info on the right */}
+          <div className="md:w-2/3 w-full">
+            <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
+              <h1 className="text-xl font-semibold">{profile.username || "User"}</h1>
+              <Button className="w-full md:w-auto" size="sm" asChild>
+                <Link href="/upload">Upload Photo</Link>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full md:w-auto"
+                onClick={() => setShowProfileForm(!showProfileForm)}
+              >
+                Edit Profile
+              </Button>
             </div>
             
-            {profile.bio && (
-              <p className="mt-2 text-sm">{profile.bio}</p>
-            )}
+            {/* Stats row - made clickable */}
+            <div className="flex items-center gap-8 my-4">
+              <div className="text-center md:text-left">
+                <span className="font-semibold">{userPhotos.length}</span>{" "}
+                <span className="text-sm text-gray-500">posts</span>
+              </div>
+              <button 
+                className="text-center md:text-left cursor-pointer hover:opacity-80 bg-transparent border-none p-0"
+                onClick={() => setShowFollowers(true)}
+              >
+                <span className="font-semibold">{profile.followers_count || 0}</span>{" "}
+                <span className="text-sm text-gray-500">followers</span>
+              </button>
+              <button 
+                className="text-center md:text-left cursor-pointer hover:opacity-80 bg-transparent border-none p-0"
+                onClick={() => setShowFollowing(true)}
+              >
+                <span className="font-semibold">{profile.following_count || 0}</span>{" "}
+                <span className="text-sm text-gray-500">following</span>
+              </button>
+            </div>
+            
+            {/* Full name and bio */}
+            <div>
+              {profile.full_name && (
+                <p className="font-semibold text-sm">{profile.full_name}</p>
+              )}
+              {profile.bio && (
+                <p className="text-sm mt-1">{profile.bio}</p>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Profile Form Section - Conditional Rendering */}
+        {showProfileForm && (
+          <div className="mb-8 border rounded-lg p-6 bg-white shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Edit Profile</h2>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowProfileForm(false)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </Button>
+            </div>
+            
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            {success && (
+              <Alert className="mb-4">
+                <AlertDescription>{success}</AlertDescription>
+              </Alert>
+            )}
+            
+            <form onSubmit={handleUpdateProfile} className="space-y-6">
+              <div className="flex items-center gap-6">
+                <Avatar className="w-20 h-20">
+                  <AvatarImage src={avatarPreview || profile.avatar_url || ""} alt={profile.username || "User"} />
+                  <AvatarFallback>{profile.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || "U"}</AvatarFallback>
+                </Avatar>
+
+                  <div>
+                  <Label htmlFor="avatar" className="block mb-2">Profile Photo</Label>
+                  <Input 
+                    id="avatar" 
+                    type="file" 
+                    accept="image/*"
+                    className="max-w-xs"
+                    onChange={handleAvatarChange}
+                  />
+                  </div>
+                  </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input 
+                    id="username" 
+                    value={username} 
+                    onChange={(e) => setUsername(e.target.value)} 
+                    required
+                  />
+                  </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input 
+                    id="fullName" 
+                    value={fullName} 
+                    onChange={(e) => setFullName(e.target.value)} 
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bio">Bio</Label>
+                <Textarea 
+                  id="bio" 
+                  value={bio} 
+                  onChange={(e) => setBio(e.target.value)} 
+                  rows={3} 
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" type="button" onClick={() => {
+                  // Reset form to current profile values
+                  setUsername(profile?.username || "")
+                  setFullName(profile?.full_name || "")
+                  setBio(profile?.bio || "")
+                  setAvatarFile(null)
+                  setAvatarPreview(null)
+                  setError(null)
+                  setSuccess(null)
+                  setShowProfileForm(false)
+                }}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updating}>
+                  {updating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
+                </Button>
+              </div>
+            </form>
+
+            <div className="mt-10 pt-6 border-t">
+              <h3 className="font-semibold mb-4">Danger Zone</h3>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button 
+                  variant="outline" 
+                  className="border-red-500 text-red-500 hover:bg-red-50"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log Out
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="border-red-500 text-red-500 hover:bg-red-50"
+                  type="button"
+                >
+                  Delete Account
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         
-        <Tabs defaultValue="uploads">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="uploads">Uploads</TabsTrigger>
-            <TabsTrigger value="stats">Stats</TabsTrigger>
-            <TabsTrigger value="social">Social</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+        {/* Instagram-style tab bar - without settings */}
+        <Tabs defaultValue="uploads" className="mb-4">
+          <TabsList className="w-full justify-center border-b rounded-none bg-transparent">
+            <TabsTrigger 
+              value="uploads" 
+              className="flex items-center gap-2 data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:rounded-none data-[state=active]:shadow-none"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-grid-3x3"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 9h18" /><path d="M3 15h18" /><path d="M9 3v18" /><path d="M15 3v18" /></svg>
+              Posts
+            </TabsTrigger>
+            <TabsTrigger 
+              value="stats" 
+              className="flex items-center gap-2 data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:rounded-none data-[state=active]:shadow-none"
+            >
+              <Star className="h-4 w-4" />
+              Stats
+            </TabsTrigger>
           </TabsList>
-          
-          <TabsContent value="uploads">
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Uploads</CardTitle>
-                <CardDescription>Photos you&apos;ve shared on FitRate</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingPhotos ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <Skeleton key={i} className="aspect-[3/4] rounded-lg" />
-                    ))}
-                  </div>
-                ) : userPhotos.length === 0 ? (
-                  <div className="text-center py-10">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-                      <Upload className="h-8 w-8 text-gray-400" />
+
+          <TabsContent value="uploads" className="mt-6">
+            {loadingPhotos ? (
+              <div className="grid grid-cols-3 gap-1">
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <Skeleton key={i} className="aspect-square w-full rounded-none" />
+                ))}
+              </div>
+            ) : userPhotos.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                  <Upload className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="font-medium mb-1">No uploads yet</h3>
+                <p className="text-sm text-gray-500 mb-4">Share your progress photos with the community</p>
+                <Button asChild>
+                  <Link href="/upload">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload a Photo
+                  </Link>
+                </Button>
                     </div>
-                    <h3 className="font-medium mb-1">No uploads yet</h3>
-                    <p className="text-sm text-gray-500 mb-4">Share your progress photos with the community</p>
-                    <Button asChild>
-                      <Link href="/upload">
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload a Photo
-                      </Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {userPhotos.map(photo => (
-                      <PhotoCard
-                        key={photo.id}
-                        id={photo.id}
-                        imageUrl={photo.image_url}
-                        title={photo.title || ""}
-                        description={photo.description || ""}
-                        rating={photo.rating || 0}
-                        votesCount={photo.votes_count || 0}
-                        likesCount={photo.likes_count || 0}
-                        commentsCount={photo.comments_count || 0}
-                        username={profile.username || ""}
-                        userAvatar={profile.avatar_url || ""}
-                        userId={photo.user_id}
-                        createdAt={photo.created_at}
-                        showDeleteButton={true}
-                        onDelete={() => handleDeletePhoto(photo.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {userPhotos.map(photo => (
+                  <PhotoCard
+                    key={photo.id}
+                    id={photo.id}
+                    imageUrl={photo.image_url}
+                    title={photo.title || ""}
+                    description={photo.description || ""}
+                    rating={photo.rating || 0}
+                    votesCount={photo.votes_count || 0}
+                    likesCount={photo.likes_count || 0}
+                    commentsCount={photo.comments_count || 0}
+                    username={profile.username || ""}
+                    userAvatar={profile.avatar_url || ""}
+                    userId={photo.user_id}
+                    createdAt={photo.created_at}
+                    showDeleteButton={true}
+                    onDelete={() => handleDeletePhoto(photo.id)}
+                        />
+                      ))}
+                    </div>
+            )}
           </TabsContent>
           
           <TabsContent value="stats">
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Stats</CardTitle>
-                <CardDescription>Your activity statistics on FitRate</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingStats ? (
-                  <div className="space-y-4">
-                    <Skeleton className="h-20" />
-                    <Skeleton className="h-40" />
+            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+              {loadingStats ? (
+                <div className="space-y-4 p-6">
+                  <Skeleton className="h-20" />
+                  <Skeleton className="h-40" />
+                </div>
+              ) : stats ? (
+                <div>
+                  {/* Header with title */}
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 sm:p-6 border-b">
+                    <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-800">
+                      <Star className="h-5 w-5 text-amber-500" fill="currentColor" />
+                      Your Fitness Rating Stats
+                    </h2>
+                    <p className="text-sm text-gray-600 mt-1">Track your progress and community interaction</p>
                   </div>
-                ) : stats ? (
-                  <div className="space-y-8">
+
+                  {/* Main stats cards */}
+                  <div className="p-4 sm:p-6">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg text-center">
-                        <div className="text-2xl font-bold">{stats.totalUploads || 0}</div>
-                        <div className="text-sm text-gray-500">Uploads</div>
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl shadow-sm border border-blue-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-sm font-medium text-blue-700">Uploads</span>
+                          <Upload className="h-4 w-4 text-blue-500" />
+                        </div>
+                        <div className="text-2xl font-bold text-blue-900">{stats.totalUploads || 0}</div>
                       </div>
-                      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg text-center">
-                        <div className="text-2xl font-bold">{stats.averageRatingReceived.toFixed(1) || "0.0"}</div>
-                        <div className="text-sm text-gray-500">Avg. Rating Received</div>
+                      
+                      <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl shadow-sm border border-amber-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-sm font-medium text-amber-700">Avg. Rating</span>
+                          <Star className="h-4 w-4 text-amber-500" fill="currentColor" />
+                        </div>
+                        <div className="text-2xl font-bold text-amber-900">{stats.averageRatingReceived.toFixed(1) || "0.0"}</div>
                       </div>
-                      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg text-center">
-                        <div className="text-2xl font-bold">{stats.totalRatings || 0}</div>
-                        <div className="text-sm text-gray-500">Ratings Given</div>
+                      
+                      <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl shadow-sm border border-green-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-sm font-medium text-green-700">Ratings Given</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                        </div>
+                        <div className="text-2xl font-bold text-green-900">{stats.totalRatings || 0}</div>
                       </div>
-                      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg text-center">
-                        <div className="text-2xl font-bold">{stats.averageRatingGiven.toFixed(1) || "0.0"}</div>
-                        <div className="text-sm text-gray-500">Avg. Rating Given</div>
-                      </div>
+                      
+                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl shadow-sm border border-purple-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-sm font-medium text-purple-700">Rating Given</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-500"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" /></svg>
+                        </div>
+                        <div className="text-2xl font-bold text-purple-900">{stats.averageRatingGiven.toFixed(1) || "0.0"}</div>
                     </div>
-                    
-                    <div>
-                      <h3 className="font-medium mb-4">Rating Distribution</h3>
-                      <div className="space-y-3">
-                        <div>
-                          <div className="flex justify-between mb-1">
-                            <span className="text-sm">9-10 ⭐⭐⭐⭐⭐</span>
-                            <span className="text-sm">{stats.ratingDistribution['9-10']}%</span>
-                          </div>
-                          <Progress value={stats.ratingDistribution['9-10']} className="h-2" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between mb-1">
-                            <span className="text-sm">7-8 ⭐⭐⭐⭐</span>
-                            <span className="text-sm">{stats.ratingDistribution['7-8']}%</span>
-                          </div>
-                          <Progress value={stats.ratingDistribution['7-8']} className="h-2" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between mb-1">
-                            <span className="text-sm">5-6 ⭐⭐⭐</span>
-                            <span className="text-sm">{stats.ratingDistribution['5-6']}%</span>
-                          </div>
-                          <Progress value={stats.ratingDistribution['5-6']} className="h-2" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between mb-1">
-                            <span className="text-sm">1-4 ⭐⭐</span>
-                            <span className="text-sm">{stats.ratingDistribution['1-4']}%</span>
-                          </div>
-                          <Progress value={stats.ratingDistribution['1-4']} className="h-2" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <p>No stats available yet</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="social">
-            <Card>
-              <CardHeader>
-                <CardTitle>Social Connections</CardTitle>
-                <CardDescription>Your followers and people you follow</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingFollowers ? (
-                  <div className="space-y-4">
-                    <Skeleton className="h-40" />
-                    <Skeleton className="h-40" />
-                  </div>
-                ) : (
-                  <div className="space-y-8">
-                    <div>
-                      <h3 className="font-medium mb-4">Followers ({followers.length})</h3>
-                      {followers.length === 0 ? (
-                        <div className="text-center py-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                          <Users className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                          <p className="text-sm text-gray-500">No followers yet</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                          {followers.map(follower => (
-                            <div key={follower.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                              <Avatar>
-                                <AvatarImage src={follower.avatar_url || ""} alt={follower.username || "User"} />
-                                <AvatarFallback>{follower.username?.[0]?.toUpperCase() || "U"}</AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">{follower.username || "User"}</p>
-                                {follower.full_name && (
-                                  <p className="text-xs text-gray-500 truncate">{follower.full_name}</p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div>
-                      <h3 className="font-medium mb-4">Following ({following.length})</h3>
-                      {following.length === 0 ? (
-                        <div className="text-center py-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                          <Users className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                          <p className="text-sm text-gray-500">You&apos;re not following anyone yet</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                          {following.map(followed => (
-                            <div key={followed.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                              <Avatar>
-                                <AvatarImage src={followed.avatar_url || ""} alt={followed.username || "User"} />
-                                <AvatarFallback>{followed.username?.[0]?.toUpperCase() || "U"}</AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">{followed.username || "User"}</p>
-                                {followed.full_name && (
-                                  <p className="text-xs text-gray-500 truncate">{followed.full_name}</p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle>Account Settings</CardTitle>
-                <CardDescription>Manage your account preferences</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {error && (
-                  <Alert variant="destructive" className="mb-4">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-                
-                {success && (
-                  <Alert className="mb-4">
-                    <AlertDescription>{success}</AlertDescription>
-                  </Alert>
-                )}
-                
-                <form onSubmit={handleUpdateProfile} className="space-y-6">
-                  <div className="flex items-center gap-6">
-                    <Avatar className="w-20 h-20">
-                      <AvatarImage src={avatarPreview || profile.avatar_url || ""} alt={profile.username || "User"} />
-                      <AvatarFallback>{profile.username?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || "U"}</AvatarFallback>
-                    </Avatar>
-                    
-                    <div>
-                      <Label htmlFor="avatar" className="block mb-2">Profile Photo</Label>
-                      <Input 
-                        id="avatar" 
-                        type="file" 
-                        accept="image/*"
-                        className="max-w-xs"
-                        onChange={handleAvatarChange}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="username">Username</Label>
-                      <Input 
-                        id="username" 
-                        value={username} 
-                        onChange={(e) => setUsername(e.target.value)} 
-                        required
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="fullName">Full Name</Label>
-                      <Input 
-                        id="fullName" 
-                        value={fullName} 
-                        onChange={(e) => setFullName(e.target.value)} 
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="bio">Bio</Label>
-                    <Textarea 
-                      id="bio" 
-                      value={bio} 
-                      onChange={(e) => setBio(e.target.value)} 
-                      rows={3} 
-                    />
                   </div>
 
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" type="button" onClick={() => {
-                      // Reset form to current profile values
-                      setUsername(profile?.username || "")
-                      setFullName(profile?.full_name || "")
-                      setBio(profile?.bio || "")
-                      setAvatarFile(null)
-                      setAvatarPreview(null)
-                      setError(null)
-                      setSuccess(null)
-                    }}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={updating}>
-                      {updating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        "Save Changes"
-                      )}
-                    </Button>
-                  </div>
-                </form>
-
-                <div className="mt-10 pt-6 border-t">
-                  <h3 className="font-semibold mb-4">Danger Zone</h3>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Button 
-                      variant="outline" 
-                      className="border-red-500 text-red-500 hover:bg-red-50"
-                      onClick={handleSignOut}
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Log Out
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="border-red-500 text-red-500 hover:bg-red-50"
-                      type="button"
-                    >
-                      Delete Account
-                    </Button>
+                    {/* Rating distribution */}
+                    <div className="mt-8 bg-white p-5 rounded-xl border shadow-sm">
+                      <h3 className="font-medium mb-4 flex items-center gap-2 text-gray-800">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600"><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></svg>
+                        Rating Distribution
+                      </h3>
+                    <div className="space-y-4">
+                        <div>
+                          <div className="flex justify-between mb-1">
+                            <span className="text-sm font-medium flex items-center">
+                              <span className="w-12 inline-block">9-10</span>
+                              <span className="text-amber-500">★★★★★</span>
+                            </span>
+                            <span className="text-sm font-medium text-gray-700">{stats.ratingDistribution['9-10']}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div className="bg-amber-500 h-2.5 rounded-full" style={{ width: `${stats.ratingDistribution['9-10']}%` }}></div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between mb-1">
+                            <span className="text-sm font-medium flex items-center">
+                              <span className="w-12 inline-block">7-8</span>
+                              <span className="text-green-500">★★★★<span className="text-gray-300">★</span></span>
+                            </span>
+                            <span className="text-sm font-medium text-gray-700">{stats.ratingDistribution['7-8']}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${stats.ratingDistribution['7-8']}%` }}></div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between mb-1">
+                            <span className="text-sm font-medium flex items-center">
+                              <span className="w-12 inline-block">5-6</span>
+                              <span className="text-blue-500">★★★<span className="text-gray-300">★★</span></span>
+                            </span>
+                            <span className="text-sm font-medium text-gray-700">{stats.ratingDistribution['5-6']}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${stats.ratingDistribution['5-6']}%` }}></div>
+                        </div>
+                      </div>
+                        <div>
+                          <div className="flex justify-between mb-1">
+                            <span className="text-sm font-medium flex items-center">
+                              <span className="w-12 inline-block">1-4</span>
+                              <span className="text-orange-500">★★<span className="text-gray-300">★★★</span></span>
+                            </span>
+                            <span className="text-sm font-medium text-gray-700">{stats.ratingDistribution['1-4']}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div className="bg-orange-500 h-2.5 rounded-full" style={{ width: `${stats.ratingDistribution['1-4']}%` }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Motivational text */}
+                    <div className="mt-6 text-center">
+                      <p className="text-sm text-gray-600 italic">
+                        Keep uploading and participating to improve your stats!
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 px-4">
+                  <Star className="h-12 w-12 text-gray-300 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">No stats available yet</h3>
+                  <p className="text-sm text-gray-500 mb-6 max-w-md text-center">
+                    Upload photos and rate others to start building your stats
+                  </p>
+                  <Button asChild size="sm">
+                    <Link href="/upload">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Your First Photo
+                    </Link>
+                  </Button>
+                </div>
+              )}
+          </div>
+        </TabsContent>
         </Tabs>
+        
+        {/* Followers Dialog */}
+        <Dialog open={showFollowers} onOpenChange={setShowFollowers}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Followers</DialogTitle>
+            </DialogHeader>
+            {loadingFollowers ? (
+              <div className="space-y-4 p-4">
+                <Skeleton className="h-12" />
+                <Skeleton className="h-12" />
+                <Skeleton className="h-12" />
+                    </div>
+            ) : followers.length === 0 ? (
+              <div className="text-center py-6">
+                <Users className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                <p className="text-sm text-gray-500">No followers yet</p>
+                        </div>
+            ) : (
+              <div className="max-h-[60vh] overflow-y-auto p-1">
+                <div className="space-y-2">
+                  {followers.map(follower => (
+                    <Link 
+                      key={follower.username} 
+                      href={`/users/${follower.username}`} 
+                      className="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <Avatar>
+                        <AvatarImage src={follower.avatar_url || ""} alt={follower.username || "User"} />
+                        <AvatarFallback>{follower.username?.[0]?.toUpperCase() || "U"}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{follower.username || "User"}</p>
+                        {follower.full_name && (
+                          <p className="text-xs text-gray-500 truncate">{follower.full_name}</p>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                    </div>
+                  </div>
+            )}
+          </DialogContent>
+        </Dialog>
+        
+        {/* Following Dialog */}
+        <Dialog open={showFollowing} onOpenChange={setShowFollowing}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Following</DialogTitle>
+            </DialogHeader>
+            {loadingFollowers ? (
+              <div className="space-y-4 p-4">
+                <Skeleton className="h-12" />
+                <Skeleton className="h-12" />
+                <Skeleton className="h-12" />
+              </div>
+            ) : following.length === 0 ? (
+              <div className="text-center py-6">
+                <Users className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                <p className="text-sm text-gray-500">You're not following anyone yet</p>
+              </div>
+            ) : (
+              <div className="max-h-[60vh] overflow-y-auto p-1">
+                  <div className="space-y-2">
+                  {following.map(followed => (
+                    <Link 
+                      key={followed.username} 
+                      href={`/users/${followed.username}`}
+                      className="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <Avatar>
+                        <AvatarImage src={followed.avatar_url || ""} alt={followed.username || "User"} />
+                        <AvatarFallback>{followed.username?.[0]?.toUpperCase() || "U"}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{followed.username || "User"}</p>
+                        {followed.full_name && (
+                          <p className="text-xs text-gray-500 truncate">{followed.full_name}</p>
+                        )}
+                    </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

@@ -28,21 +28,21 @@ export default function UploadPage() {
   const [isCropping, setIsCropping] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [originalImage, setOriginalImage] = useState<string | null>(null)
-  
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (!selectedFile) return
     
     setFile(selectedFile)
-    
+
     // Create a preview URL
-    const reader = new FileReader()
-    reader.onloadend = () => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
       const result = reader.result as string
       setPreviewUrl(result)
       setOriginalImage(result)
-    }
-    reader.readAsDataURL(selectedFile)
+      }
+      reader.readAsDataURL(selectedFile)
   }
   
   const handleCropStart = () => {
@@ -72,7 +72,7 @@ export default function UploadPage() {
           // Landscape
           drawHeight = canvas.height / zoom
           drawWidth = drawHeight * aspectRatio
-        } else {
+    } else {
           // Portrait
           drawWidth = canvas.width / zoom
           drawHeight = drawWidth / aspectRatio
@@ -132,10 +132,10 @@ export default function UploadPage() {
       setError('Failed to crop image')
     }
   }
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!user || !file || !title.trim()) {
       setError('Please provide a title and image')
       return
@@ -177,11 +177,11 @@ export default function UploadPage() {
       </div>
     )
   }
-  
+
   return (
     <div className="container max-w-4xl py-8">
       <h1 className="text-3xl font-bold mb-6">Upload Photo</h1>
-      
+
       <Card>
         <CardHeader>
           <CardTitle>Share your fitness journey</CardTitle>
@@ -277,30 +277,30 @@ export default function UploadPage() {
               </div>
             ) : (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input 
-                    id="title" 
-                    value={title} 
-                    onChange={(e) => setTitle(e.target.value)} 
+            <div className="space-y-2">
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
                     placeholder="Give your photo a title"
-                    required
-                  />
-                </div>
-                
-                <div className="space-y-2">
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
                   <Label htmlFor="description">Description (optional)</Label>
-                  <Textarea 
-                    id="description" 
-                    value={description} 
-                    onChange={(e) => setDescription(e.target.value)} 
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
                     placeholder="Add more details about your photo"
-                    rows={3}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="photo">Photo</Label>
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="photo">Photo</Label>
                   {previewUrl ? (
                     <div className="relative">
                       <img 
@@ -335,10 +335,10 @@ export default function UploadPage() {
                   ) : (
                     <div className="border border-dashed rounded-md p-8 text-center">
                       <Input 
-                        id="photo" 
-                        type="file" 
-                        accept="image/*"
-                        onChange={handleFileChange}
+                  id="photo"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
                         className="hidden"
                       />
                       <Label 
@@ -349,9 +349,9 @@ export default function UploadPage() {
                         <span className="text-sm font-medium">Click to select an image</span>
                         <span className="text-xs text-gray-500">JPG, PNG, GIF up to 10MB</span>
                       </Label>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
+              </div>
               </>
             )}
           </CardContent>
@@ -372,18 +372,18 @@ export default function UploadPage() {
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Uploading...
+                  Uploading...
                   </>
-                ) : (
+              ) : (
                   <>
                     <Upload className="h-4 w-4 mr-2" />
-                    Upload Photo
+                  Upload Photo
                   </>
-                )}
-              </Button>
+              )}
+            </Button>
             </CardFooter>
           )}
-        </form>
+          </form>
       </Card>
     </div>
   )

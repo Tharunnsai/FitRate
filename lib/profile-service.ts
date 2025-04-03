@@ -105,52 +105,52 @@ export async function uploadAvatar(
       throw new Error('Missing userId or file')
     }
 
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${userId}_${Math.random().toString(36).substring(2)}.${fileExt}`
-    
-    console.log(`Uploading avatar for user ${userId}, filename: ${fileName}`)
-    
-    const { error: uploadError, data: uploadData } = await supabase.storage
-      .from('avatars')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
-      })
-    
-    if (uploadError) {
-      console.error('Error uploading to storage:', uploadError)
-      throw uploadError
+    // Validate file is an image
+    if (!file.type.startsWith('image/')) {
+      throw new Error('File must be an image')
     }
-    
-    const { data } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(fileName)
-    
-    if (!data.publicUrl) {
-      throw new Error('Failed to get public URL')
+
+    // Create a FormData object
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('userId', userId);
+
+    // Use the new API route for avatar upload
+    const response = await fetch('/api/upload-avatar', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to upload avatar');
     }
-    
-    console.log(`Got public URL: ${data.publicUrl}`)
-    
+
+    const { url } = await response.json();
+
+    if (!url) {
+      throw new Error('Failed to get public URL');
+    }
+
     // Update the user's profile with the new avatar URL
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
-        avatar_url: data.publicUrl,
+        avatar_url: url,
         updated_at: new Date().toISOString()
       })
-      .eq('id', userId)
-    
+      .eq('id', userId);
+
     if (updateError) {
-      console.error('Error updating profile with avatar URL:', updateError)
-      throw updateError
+      console.error('Error updating profile with avatar URL:', updateError);
+      throw updateError;
     }
-    
-    console.log('Avatar updated successfully')
-    return { success: true, url: data.publicUrl }
+
+    console.log('Avatar updated successfully');
+    return { success: true, url };
   } catch (error) {
-    console.error('Error uploading avatar:', error)
-    return { success: false, error: error instanceof Error ? error : new Error(String(error)) }
+    console.error('Error uploading avatar:', error);
+    return { success: false, error: error instanceof Error ? error : new Error(String(error)) };
   }
 }
 
